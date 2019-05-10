@@ -1,0 +1,3 @@
+DEFAULT_OUTPUT_DIR = 'output/gdc'
+DEFAULT_EXPERIMENT_CODE = 'gdc'
+DEFAULT_PROJECT_ID = 'smmart-gdc'

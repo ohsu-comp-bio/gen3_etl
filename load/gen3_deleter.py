@@ -13,8 +13,29 @@ DEFAULT_ENDPOINT = 'https://localhost'
 
 def delete(program, project, submission_client):
     """Delete all content from project."""
-    delete_all(submission_client, program, project, types=['submitted_methylation', 'submitted_somatic_mutation', 'read_group', 'demographic', 'aliquot', 'sample', 'diagnosis', 'demographic', 'case', 'experiment'])
-    print(submission_client.delete_project(program, project), file=sys.stderr)
+
+    delete_all(submission_client, program, project, types=[
+        'submitted_methylation',
+        'submitted_somatic_mutation',
+        'read_group',
+        'demographic',
+        'aliquot',
+        'sample',
+        'bcc_diagnosis',
+        'diagnosis',
+        'bcc_demographic',
+        'demographic',
+        'bcc_participant',
+        'case',
+        'experiment'])
+    try:
+        print(submission_client.delete_project(program, project), file=sys.stderr)
+    except Exception as e:
+        print(e)
+    # try:
+    #     print(submission_client.delete_program(program), file=sys.stderr)
+    # except Exception as e:
+    #     print(e)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,6 @@ def transform(output_dir, compresslevel=0):
     # [ "_id", "data", "from", "gid", "label", "to" ]
     # {"_id": "(Callset:ccle:ACH-001270:None)--CallsetFor->(Aliquot:ACH-001270)", "gid": "(Callset:ccle:ACH-001270:None)--CallsetFor->(Aliquot:ACH-001270)", "label": "CallsetFor", "from": "Callset:ccle:ACH-001270:None", "to": "Aliquot:ACH-001270", "data": {}}
     for line in reader('source/ccle/maf.CallsetFor.Edge.json.gz'):
-        line = json.loads(line)
         # *type	project_id	*submitter_id	*aliquots.submitter_id	RIN	adapter_name	adapter_sequence	barcoding_applied	base_caller_name	base_caller_version	experiment_name	flow_cell_barcode	includes_spike_ins	instrument_model	is_paired_end	library_name	library_preparation_kit_catalog_number	library_preparation_kit_name	library_preparation_kit_vendor	library_preparation_kit_version	library_selection	library_strand	library_strategy	platform	read_group_name	read_length	sequencing_center	sequencing_date	size_selection_range	spike_ins_concentration	spike_ins_fasta	target_capture_kit_catalog_number	target_capture_kit_name	target_capture_kit_target_region	target_capture_kit_vendor	target_capture_kit_version	to_trim_adapter_sequence ]
         read_group_submitter_id = 'read_group-{}'.format(line['from'])
         if read_group_submitter_id in read_groups:

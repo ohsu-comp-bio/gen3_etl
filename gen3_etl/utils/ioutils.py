@@ -7,6 +7,28 @@ import csv
 import io
 import sys
 from datetime import datetime
+import json
+
+
+
+class JsonReader:
+    def __init__(self, path):
+        if path.endswith(".json.gz"):
+            self.fp = io.TextIOWrapper(io.BufferedReader(gzip.GzipFile(path)))
+        else:
+            self.fp = open(path, "r", encoding='utf-8')
+
+    def __iter__ (self):
+        return self
+
+    def __next__(self):
+        try:
+            l = self.fp.readline()
+            if len(l) < 1:
+                raise IndexError()
+            return json.loads(l)
+        except IndexError:
+            raise StopIteration()
 
 
 def ensure_directory(*args):
@@ -22,7 +44,9 @@ def ensure_directory(*args):
 
 def reader(path, **kwargs):
     """Wrap gzip if necessary."""
-    if path.endswith(".gz"):
+    if path.endswith(".json.gz"):
+        return JsonReader(path)
+    elif path.endswith(".gz"):
         return io.TextIOWrapper(
             io.BufferedReader(gzip.GzipFile(path))
         )
@@ -30,6 +54,8 @@ def reader(path, **kwargs):
         return csv.DictReader(open(path, "r", encoding='utf-8'), **kwargs)
     elif path.endswith(".tsv"):
         return csv.DictReader(open(path, "r", encoding='utf-8'), delimiter="\t", **kwargs)
+    elif path.endswith(".json"):
+        return JsonReader(path)
     else:
         return open(path, "r", encoding='utf-8')
 
@@ -80,15 +106,17 @@ class Rate:
 class JSONEmitter():
     """Writes objects to disk as json, defaults to gz."""
 
-    def __init__(self, path, compresslevel=9):
+    def __init__(self, path, append=False, compresslevel=9):
         """Ensure path exists, set compresslevel=0 or path contains gz to skip compression."""
         self.path = path
         self.compresslevel = compresslevel
         self.rate = Rate()
-
+        mode = 'wt'
+        if append:
+            mode = 'at'
         ensure_directory(os.path.dirname(path))
         if compresslevel == 0 and not path.endswith('.gz'):
-            self.fh = open(path, mode='wt')
+            self.fh = open(path, mode=mode)
         else:
 
             if 'gz' not in path:
