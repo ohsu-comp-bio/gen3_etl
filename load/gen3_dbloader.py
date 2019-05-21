@@ -3,6 +3,7 @@ import os
 from glob import glob
 import json
 import sys
+from datetime import datetime
 
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
@@ -39,6 +40,11 @@ def write_edge(link, line):
 def write_node(handle, line):
     """Writes edge file ready for sql import. Strips edge from submission node."""
     node_id = uuid.uuid5(uuid.NAMESPACE_DNS, line['submitter_id'].lower())
+    now = datetime.utcnow().isoformat()
+    # ensure timestamps
+    for p in ['updated_datetime', 'created_datetime']:
+        if p not in line:
+            line[p] = now
     handle.write('{}\x01{}\x01{}\x01{}\n'.format(node_id, '{}', '{}', json.dumps(line, separators=(',',':'))))
     return line
 
@@ -76,6 +82,7 @@ def get_tables(submission_client, line):
     assert 'type' in line, 'no "type" in record {}'.format(line)
     type = line['type']
     type_schema = submission_client.get_dictionary_node(type)
+    assert 'id' in type_schema, '{} not found in schema {}'.format(type, type_schema)
     assert type == type_schema['id'], 'schema id should be the same as type {}'.format([type,type_schema['id']])
     table_name = get_class_tablename_from_id(type)
     tables = {'node_table': table_name, 'links': []}
