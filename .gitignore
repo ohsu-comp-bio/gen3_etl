@@ -110,3 +110,7 @@ output/
 
 config/*.json
 !config/credentials.sample.json
+
+
+# mac
+.DS_Store
