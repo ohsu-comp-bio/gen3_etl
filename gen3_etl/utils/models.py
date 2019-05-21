@@ -1,3 +1,7 @@
+import json
+import hashlib
+
+
 def default_case(experiment_code, participantid, project_id):
     """Creates a minimal case."""
     return {
@@ -68,4 +72,29 @@ def default_aliquot(sample_submitter_id, project_id):
         "samples": {"submitter_id": sample_submitter_id},
         "submitter_id": '{}-aliquot'.format(sample_submitter_id),
         "project_id": project_id
+    }
+
+
+def default_treatment(treatment_submitter_id, diagnosis_submitter_id, treatment_type, project_id):
+    return {
+        'type': 'treatment',
+        'project_id': project_id,
+        'treatment_type': treatment_type,
+        'diagnoses': {'submitter_id': diagnosis_submitter_id},
+        'submitter_id': treatment_submitter_id
+    }
+
+
+def default_observation(case_submitter_id, project_id, date, observation_type, line):
+    """Creates a minimal observation."""
+    js = json.dumps(line, separators=(',',':'))
+    check_sum = hashlib.sha256(js.encode('utf-8')).hexdigest()
+
+    return {
+        "type": "observation",
+        "cases": {"submitter_id": case_submitter_id},
+        "submitter_id": '{}-{}-{}'.format(case_submitter_id, observation_type, check_sum),
+        "project_id": project_id,
+        "date": date,
+        "observation_type": observation_type
     }
