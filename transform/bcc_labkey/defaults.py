@@ -1,8 +1,10 @@
 from gen3_etl.utils.cli import default_argument_parser
 from gen3_etl.utils.ioutils import JSONEmitter
-from gen3_etl.utils.models import default_case, default_sample, default_aliquot, default_diagnosis
+from gen3_etl.utils.models import default_case, default_sample, default_aliquot, default_diagnosis, default_treatment, default_observation
 
 import os
+import hashlib
+import json
 
 DEFAULT_OUTPUT_DIR = 'output/bcc'
 DEFAULT_EXPERIMENT_CODE = 'bcc'
@@ -28,3 +30,23 @@ def default_parser(output_dir, experiment_code, project_id):
                         default=True,
                         help='generate schemas (true).'.format(experiment_code))
     return parser
+
+
+def missing_parent(**kwargs):
+    """Returns dict of missing item."""
+    for p in ['parent_id', 'parent_type', 'child_id', 'child_type']:
+        assert p in kwargs, 'missing {}'.format(p)
+    return kwargs
+
+def save_missing_parents(missing_parents, output_dir=DEFAULT_OUTPUT_DIR):
+    """Saves list of missing item. Dedupes."""
+    with open('{}/missing.json'.format(output_dir), 'a') as missing_parent_file:
+        dedupe = set([])
+        for mp in missing_parents:
+            js = json.dumps(mp, separators=(',',':'))
+            check_sum = hashlib.sha256(js.encode('utf-8')).digest()
+            if check_sum in dedupe:
+                continue
+            dedupe.add(check_sum)
+            missing_parent_file.write(js)
+            missing_parent_file.write('\n')

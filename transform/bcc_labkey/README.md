@@ -21,6 +21,7 @@ python3 transform/bcc_labkey/sample.py
 python3 transform/bcc_labkey/aliquot.py
 
 python3 transform/bcc_labkey/genetrails_variant.py
+python3 transform/bcc_labkey/treatment.py
 
 
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/case.json --delete_first true
@@ -35,6 +36,13 @@ python3 load/gen3_dbloader.py $EP $PP --path output/bcc/bcc_demographic.json --d
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/sample.json --delete_first true
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/bcc_sample.json --delete_first true
 
+python3 load/gen3_dbloader.py $EP $PP --path output/bcc/aliquot.json --delete_first true
+
+python3 load/gen3_dbloader.py $EP $PP --path output/bcc/genetrails_variant.json --delete_first true
+
+python3 load/gen3_dbloader.py $EP $PP --path output/bcc/treatment.json --delete_first true
+
+python3 load/gen3_dbloader.py $EP $PP --path output/bcc/bcc_chemotherapy.json --delete_first true
 
 ```
 
