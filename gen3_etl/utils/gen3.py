@@ -35,7 +35,7 @@ def create_node(submission_client, program_name, project_code, node):
         nodes = node
         if not isinstance(node, (list,)):
             nodes = [node]
-        response_text = submission_client.submit_node(program_name, project_code, nodes)
+        response_text = submission_client.submit_record(program_name, project_code, nodes)
         response = None
         response = json.loads(response_text)
         assert response['code'] == 200, 'could not create {} {}'.format(nodes[0]['type'], response_text)
