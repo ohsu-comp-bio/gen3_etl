@@ -27,7 +27,7 @@ import uuid
 
 def write_edge(link, line):
     """Writes edge file ready for sql import. Strips edge from submission node."""
-    edge = line[link['src_edge_property']]
+    edge = line.get(link['src_edge_property'], None)
     if not edge:
         return line
     src_id = uuid.uuid5(uuid.NAMESPACE_DNS, line['submitter_id'].lower())
