@@ -3,26 +3,23 @@ import os
 import json
 
 from gen3_etl.utils.ioutils import reader, JSONEmitter
-from gen3_etl.utils.cli import default_argument_parser
+
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, default_parser, emitter
+from gen3_etl.utils.schema import generate, template
 
 
-DEFAULT_OUTPUT_DIR = 'output/ccle'
-DEFAULT_EXPERIMENT = 'ccle'
-
-
-def transform(output_dir, compresslevel=0):
+def transform(item_paths, output_dir, compresslevel=0):
     """Transform the bmeg input to gen3 output directory."""
-    projects_emitter = JSONEmitter(os.path.join(output_dir, 'projects.json'), compresslevel=0)
-    experiments_emitter = JSONEmitter(os.path.join(output_dir, 'experiments.json'), compresslevel=0)
-    cases_emitter = JSONEmitter(os.path.join(output_dir, 'cases.json'), compresslevel=0)
-    demographics_emitter = JSONEmitter(os.path.join(output_dir, 'demographics.json'), compresslevel=0)
+    projects_emitter = emitter('project', output_dir=output_dir)
+    experiments_emitter = emitter('experiment', output_dir=output_dir)
+    cases_emitter = emitter('case', output_dir=output_dir)
+    demographics_emitter = emitter('demographic', output_dir=output_dir)
     cases = {}
     projects = {}
     experiments = {}
 
     for p in ['source/ccle/InProject.Edge.json.gz', 'source/ccle/maf.InProject.Edge.json.gz']:
         for line in reader(p):
-            line = json.loads(line)
             # # ['type', 'project_id', '*submitter_id', '*cases.submitter_id', 'ethnicity', 'gender', 'race', 'year_of_birth', 'year_of_death']
             project_submitter_id = line['to']
             project_name = project_submitter_id.replace('Project:', '')
@@ -48,11 +45,10 @@ def transform(output_dir, compresslevel=0):
     projects_emitter.close()
     experiments_emitter.close()
 
-    for p in ['source/ccle/Individual.Vertex.json.gz', 'source/ccle/maf.Individual.Vertex.json.gz']:
+    for p in item_paths:
         # ['MRN', 'OPTR', 'Date Of Initial Diagnosis', 'Sequence Number', 'Cancer Status', 'cEarliest Chemo Date', 'cEarliest Chemo Date Source', 'cErrorList', 'cEventCount', 'cNeoadjuvant Treatment', 'Count', 'cParent Specimen Count', 'Date of Most Definitive Surgical Resection', 'Tumor Size', 'Type Of First Recurrence', 'Case_ICD::Transformation', 'Case_Patient::Sex']
         for line in reader(p):
             # {"_id": "Individual:CCLE:ACH-001665", "gid": "Individual:CCLE:ACH-001665", "label": "Individual", "data": {"individual_id": "CCLE:ACH-001665", "ccle_attributes": {"gender": "Male"}}}
-            line = json.loads(line)
             case_submitter_id = line['gid']
             # # ['type', 'project_id', '*submitter_id', '*cases.submitter_id', 'ethnicity', 'gender', 'race', 'year_of_birth', 'year_of_death']
             case = cases[case_submitter_id]
@@ -107,10 +103,12 @@ def transform(output_dir, compresslevel=0):
 
 
 if __name__ == "__main__":
-    parser = default_argument_parser(
-        output_dir=DEFAULT_OUTPUT_DIR,
-        description='Reads ccle bmeg vertexes and writes gen3 json ({}).'.format(DEFAULT_OUTPUT_DIR)
-    )
+    item_paths = ['source/ccle/Individual.Vertex.json.gz', 'source/ccle/maf.Individual.Vertex.json.gz']
+    args = default_parser().parse_args()
+    transform(item_paths=item_paths, output_dir=args.output_dir)
 
-    args = parser.parse_args()
-    transform(output_dir=args.output_dir)
+
+    # glob.glob("output/bcc/*.json")
+    if args.schema:
+        schema_path = generate(item_paths,'case', output_dir=DEFAULT_OUTPUT_DIR)
+        print(schema_path)

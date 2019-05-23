@@ -19,7 +19,6 @@ def transform(output_dir, compresslevel=0):
 
     for p in ['source/ccle/BiosampleFor.Edge.json.gz', 'source/ccle/maf.BiosampleFor.Edge.json.gz']:
         for line in reader(p):
-            line = json.loads(line)
             case_submitter_id = line['to']
             diagnosis_submitter_id = 'diagnosis-{}'.format(case_submitter_id)
             sample = {'type': 'sample', '*cases': {'submitter_id': line['to']}}

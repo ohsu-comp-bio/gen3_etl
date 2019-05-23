@@ -30,6 +30,8 @@ scp ubuntu@neo4j:/mnt/bmeg/bmeg-etl/outputs/ccle/maf.Individual.Vertex.json.gz .
 
 scp ubuntu@neo4j:/mnt/bmeg/bmeg-etl/outputs/ccle/DerivedFrom.Edge.json.gz .
 scp ubuntu@neo4j:/mnt/bmeg/bmeg-etl/outputs/ccle/File.Vertex.json.gz  .
+
+scp ubuntu@neo4j:/mnt/bmeg/bmeg-etl/outputs/ensembl/Gene.Vertex.json.gz .
 ```
 
 To transform
@@ -50,15 +52,18 @@ python3 load/gen3_deleter.py --program smmart --project ccle
 To load
 
 ```
-python3 load/gen3_deleter.py --program smmart --project ccle
 
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/projects.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/experiments.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/cases.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/demographics.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/diagnosis.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/samples.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/aliquots.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/read_group.json
-python3 load/gen3_loader.py --program smmart --project ccle --path output/ccle/submitted_somatic_mutation.json
+# export EP='--endpoint https://localhost'
+# export EP='--endpoint https://gen3.compbio.ohsu.edu'
+python3 load/gen3_deleter.py $EP  --program smmart --project ccle
+
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/projects.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/experiments.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/cases.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/demographics.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/diagnosis.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/samples.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/aliquots.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/read_group.json
+python3 load/gen3_loader.py $EP --program smmart --project ccle --path output/ccle/submitted_somatic_mutation.json
 ```

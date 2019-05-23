@@ -25,11 +25,19 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
     for p in glob(path):
         deleted = False
         for lines in grouper(batch_size, reader(p)):
-            nodes = [json.loads(l) for l in lines]
+            nodes = [l for l in lines]
 
             if nodes[0]['type'] == 'project':
                 for node in nodes:
-                    submission_client.create_project(program, node)
+                    r = submission_client.create_project(program, node)
+                    response = None
+                    try:
+                        response = json.loads(r)
+                    except Exception as e:
+                        pass
+                    assert response, 'could not parse response {}'.format(r)
+                    assert response['code'] == 200, 'could not create {} {}'.format(nodes[0]['type'], response)
+                    assert 'successful' in response['message'], 'could not create {} {}'.format(nodes[0]['type'], response)
                     print('Created project {}'.format(node['code']), file=sys.stderr)
                 continue
 
@@ -74,11 +82,13 @@ if __name__ == "__main__":
                         help='gen3 host base url ({}).'.format(DEFAULT_ENDPOINT))
 
     args = parser.parse_args()
+
+    sc = submission_client(refresh_file=args.credentials_path, endpoint=args.endpoint)
+
     upload(path=args.path,
            program=args.program,
            project=args.project,
-           submission_client=submission_client(refresh_file=args.credentials_path,
-                                               endpoint=args.endpoint),
+           submission_client=sc,
            batch_size=args.batch_size,
            delete_first=args.delete_first,
            )

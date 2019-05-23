@@ -15,11 +15,9 @@ def transform(output_dir, compresslevel=0):
 
     # [ "_id", "data", "from", "gid", "label", "to" ]
     for line in reader('source/ccle/DerivedFrom.Edge.json.gz'):
-        line = json.loads(line)
         read_groups[line['from']] = 'read_group-{}'.format(line['to'])
 
     for line in reader('source/ccle/File.Vertex.json.gz'):
-        line = json.loads(line)
         ssm_submitter_id = line['gid']
         read_group_submitter_id = read_groups[ssm_submitter_id]
         ssm = {
