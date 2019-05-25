@@ -1,0 +1,5 @@
+{
+    "api_key": "XXXXX",
+    "credentials": {"email": "XXX@YYY.ZZZ", "password": "XXXXX"},
+    "base_url": "https://api.medable.com/XXXXX/v2"
+}
