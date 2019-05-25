@@ -25,14 +25,20 @@ DEFAULT_ENDPOINT = 'https://localhost'
 import logging as logger
 import uuid
 
-def write_edge(link, line):
+def write_edge(link, line, submission_client, project_id):
     """Writes edge file ready for sql import. Strips edge from submission node."""
-    edge = line.get(link['src_edge_property'], None)
-    if not edge:
+    edges = line.get(link['src_edge_property'], None)
+    if not edges:
         return line
+    if not isinstance(edges, (list,)):
+        edges = [edges]
     src_id = uuid.uuid5(uuid.NAMESPACE_DNS, line['submitter_id'].lower())
-    dst_id = uuid.uuid5(uuid.NAMESPACE_DNS, edge['submitter_id'].lower())
-    link['handle'].write('{}\x01{}\x01{}\x01{}\x01{}\n'.format(src_id, dst_id, '{}', '{}', '{}'))
+    for edge in edges:
+        if link['src_edge_property'] == 'projects':
+            dst_id = get_project_node_id(submission_client, project_id)
+        else:
+            dst_id = uuid.uuid5(uuid.NAMESPACE_DNS, edge.get('submitter_id', edge.get('code')).lower())
+        link['handle'].write('{}\x01{}\x01{}\x01{}\x01{}\n'.format(src_id, dst_id, '{}', '{}', '{}'))
     del line[link['src_edge_property']]
     return line
 
@@ -65,7 +71,7 @@ def upload(path, program, project, submission_client, delete_first,output_dir):
                     print("$psql -c \"delete from {} where _props->>'project_id' = '{}-{}'  ;\"".format(tables['node_table'], program, project))
 
             for l in tables['links']:
-                line = write_edge(l, line)
+                line = write_edge(l, line, submission_client, '{}-{}'.format(program, project))
             write_node(tables['handle'], line)
 
         tables['handle'].close()
@@ -92,6 +98,11 @@ def get_tables(submission_client, line):
         tables['links'].append({'src_edge_property': src_edge_property, 'edge_table': edge_table})
     return tables
 
+def get_project_node_id(submission_client, project_id):
+    """Returns the node_id"""
+    grapql = '{ project(project_id: "' +project_id+ '") { id } }'
+    response = sc.query(grapql)
+    return response['data']['project'][0]['id']
 
 
 
