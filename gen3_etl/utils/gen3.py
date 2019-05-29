@@ -7,11 +7,16 @@ import json
 from gen3.auth import Gen3Auth
 from gen3.submission import Gen3Submission
 from gen3_etl.utils.collections import grouper
+import logging
+import hashlib
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 os.environ['CURL_CA_BUNDLE'] = ''
+
+logger = logging
+
 
 DEFAULT_CREDENTIALS_PATH = os.path.join('config', 'credentials.json')
 DEFAULT_HOST = 'localhost'
@@ -119,7 +124,7 @@ def generate_edge_tablename(src_label, label, dst_label):
         oldname = tablename
         logger.debug('Edge tablename {} too long, shortening'.format(oldname))
         tablename = 'edge_{}_{}'.format(
-            str(hashlib.md5(tablename).hexdigest())[:8],
+            str(hashlib.md5(tablename.encode('utf-8')).hexdigest())[:8],
             "{}{}{}".format(
                 ''.join([a[:2] for a in src_label.split('_')])[:10],
                 ''.join([a[:2] for a in label.split('_')])[:7],
