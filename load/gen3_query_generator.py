@@ -5,6 +5,7 @@ import json
 import sys
 from collections import defaultdict
 from itertools import chain
+import json
 
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
@@ -14,8 +15,6 @@ from gen3_etl.utils.collections import grouper
 import networkx as nx
 from networkx.algorithms.simple_paths import all_simple_paths
 from  networkx.classes.function import neighbors
-
-
 
 DEFAULT_INPUT_DIR = 'output'
 DEFAULT_OUTPUT_DIR = 'output'
@@ -100,13 +99,14 @@ def generate_query(schema, node_type):
     traverse_up(node_type)
 
     sql = """
-// {breadcrumb}
+/* {breadcrumb} */
 SELECT
-    {node}.node_id as "{id}.node_id", {node}._props as "{id}",
+    {node}.node_id as "{id}.node_id", {node}.created as "{id}.created",  {node}._props as "{id}",
 {columns}
 from {node}
 {joins}
-where {node}.node_id = ? ;"""
+where {node}.created > ? order by  {node}.created ;"""
+
 
     def make_columns(path):
         # doesn't make 1st column :-(
@@ -143,6 +143,7 @@ def all_paths(pedigrees, joins, src_type, dst_type):
     G.add_nodes_from(pedigrees.keys())
     # https://networkx.github.io/documentation/networkx-1.9/reference/generated/networkx.MultiGraph.add_edges_from.html?highlight=add_edges_from#networkx.MultiGraph.add_edges_from
     G.add_edges_from([(j['child_id'],j['id'], j) for j in joins])
+
     # make a serialized string, so set can unique
     paths = set(['->'.join(p) for p in [p for p in all_simple_paths(G, src_type,dst_type)]])
     paths = [p.split('->') for p in sorted(paths)]
@@ -167,6 +168,20 @@ def all_paths(pedigrees, joins, src_type, dst_type):
 """
   export EP='--endpoint https://nci-crdc-demo.datacommons.io'
   export PP='--program DCF  --project CCLE --credentials_path config/datacommons.io.credentials.json'
+
+
+export QG='python3 load/gen3_query_generator.py  $PP $EP --node_type '
+
+python3 load/gen3_query_generator.py  $PP $EP --node_type  slide_image
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_aligned_reads
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_copy_number
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_file
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_methylation
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_somatic_mutation
+python3 load/gen3_query_generator.py  $PP $EP --node_type  submitted_unaligned_reads
+python3 load/gen3_query_generator.py  $PP $EP --node_type  hop_survey
+python3 load/gen3_query_generator.py  $PP $EP --node_type  aliquot
+
 """
 
 
@@ -209,14 +224,16 @@ if __name__ == "__main__":
     )
 
     queries, pedigrees, link_lookup, joins, paths = generate_query(schema, args.node_type)
-    for query in queries:
-        print(query)
+    with open('output/sql/{}.sql'.format(args.node_type), 'w') as sql_file:
+        for query in queries:
+            sql_file.write(json.dumps(query, separators=(',',':')))
+            sql_file.write('\n')
 
-
-    def chunks(l, n):
-        """Yield successive n-sized chunks from l."""
-        for i in range(0, len(l), n):
-            yield l[i:i + n]
+    #
+    # def chunks(l, n):
+    #     """Yield successive n-sized chunks from l."""
+    #     for i in range(0, len(l), n):
+    #         yield l[i:i + n]
 
     # paths = all_paths(pedigrees, 'submitted_file', 'program')
     # for path in paths:
