@@ -30,9 +30,11 @@ def write_edge(link, line, submission_client, project_id):
     edges = line.get(link['src_edge_property'], None)
     if not edges:
         return line
+
     if not isinstance(edges, (list,)):
         edges = [edges]
     src_id = uuid.uuid5(uuid.NAMESPACE_DNS, line['submitter_id'].lower())
+
     for edge in edges:
         if link['src_edge_property'] == 'projects':
             dst_id = get_project_node_id(submission_client, project_id)
@@ -60,6 +62,8 @@ def upload(path, program, project, submission_client, delete_first,output_dir):
     for p in glob(path):
         tables = None
         for line in reader(p):
+            if 'project_id' not in line:
+                line['project_id'] = '{}-{}'.format(program, project)
             assert 'project_id' in line, 'must have project_id'
             assert 'submitter_id' in line, 'must have submitter_id'
             if not tables:

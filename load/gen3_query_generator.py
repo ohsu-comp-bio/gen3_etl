@@ -13,8 +13,13 @@ from gen3_etl.utils.gen3 import create_node, delete_all, submission_client, gene
 from gen3_etl.utils.collections import grouper
 
 import networkx as nx
-from networkx.algorithms.simple_paths import all_simple_paths
 from  networkx.classes.function import neighbors
+from networkx.algorithms.simple_paths import all_simple_paths
+
+from networkx.algorithms.shortest_paths.weighted import dijkstra_path
+from networkx.algorithms.approximation.connectivity import local_node_connectivity
+from networkx.algorithms.dag import dag_longest_path
+
 
 DEFAULT_INPUT_DIR = 'output'
 DEFAULT_OUTPUT_DIR = 'output'
@@ -62,6 +67,8 @@ def node_pedigrees(schema):
             links = links[0]['subgroup']
         for l in links:
             pedigrees[l['target_type']]['descendants'].add(id)
+            edge_table_name = generate_edge_tablename(id, l['label'], l['target_type'])
+            l['edge_table_name'] = edge_table_name
             link_lookup['{}-{}'.format(l['target_type'],id)] = l
     for id, n in pedigrees.copy().items():
         for descendant in n['descendants']:
@@ -69,7 +76,7 @@ def node_pedigrees(schema):
     return pedigrees, link_lookup
 
 
-def generate_query(schema, node_type):
+def generate_query(schema, node_type, dst_type='program'):
     pedigrees, link_lookup = node_pedigrees(schema)
 
     joins = []
@@ -126,7 +133,7 @@ where {node}.created > ? order by  {node}.created ;"""
                         )
                     )
 
-    paths = all_paths(pedigrees, joins, node_type, 'program')
+    paths = [p for p in all_paths(pedigrees, joins, node_type, dst_type)]
     queries = []
     for path in paths:
         col_clause = '    '+',\n    '.join(make_columns(path))
@@ -144,17 +151,26 @@ def all_paths(pedigrees, joins, src_type, dst_type):
     # https://networkx.github.io/documentation/networkx-1.9/reference/generated/networkx.MultiGraph.add_edges_from.html?highlight=add_edges_from#networkx.MultiGraph.add_edges_from
     G.add_edges_from([(j['child_id'],j['id'], j) for j in joins])
 
+    # print('dag_longest_path', dag_longest_path(G))
+    # print('local_node_connectivity', local_node_connectivity(G, src_type, dst_type))
+
+    # print('dijkstra', dijkstra_path(G, src_type,dst_type))
+    # paths = set( [p for p in dijkstra_path(G, src_type,dst_type)] )
+    # print(paths)
+
     # make a serialized string, so set can unique
     paths = set(['->'.join(p) for p in [p for p in all_simple_paths(G, src_type,dst_type)]])
     paths = [p.split('->') for p in sorted(paths)]
-
     for path in paths:
         enriched_path = []
         it = iter(path)
         dst = None
         for src in it:
             if dst:
-                enriched_path.append( { 'src_type': dst, 'dst_type': src, 'link': G.get_edge_data(dst, src)[0] } )
+                edge_data = G.get_edge_data(src, dst)
+                if edge_data:
+                    edge_data = edge_data[0]
+                enriched_path.append( { 'src_type': dst, 'dst_type': src, 'link': edge_data } )
             dst = next(it, None)
             edge_data = G.get_edge_data(src, dst)
             if edge_data:
@@ -203,6 +219,12 @@ if __name__ == "__main__":
                         required=True,
                         help='generate a select for this node_type. e.g. "sample"')
 
+    parser.add_argument('--dst_type', type=str,
+                        default='program',
+                        required=True,
+                        help='generate a select path from node_type to this destination')
+
+
     parser.add_argument('--credentials_path', type=str,
                         default=DEFAULT_CREDENTIALS_PATH,
                         help='Location of gen3 path ({}).'.format(DEFAULT_CREDENTIALS_PATH))
@@ -223,23 +245,32 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
     )
 
-    queries, pedigrees, link_lookup, joins, paths = generate_query(schema, args.node_type)
-    with open('output/sql/{}.sql'.format(args.node_type), 'w') as sql_file:
+    queries, pedigrees, link_lookup, joins, paths = generate_query(schema, args.node_type , args.dst_type)
+    file_name = 'output/sql/{}.sql'.format(args.node_type)
+    with open(file_name, 'w') as sql_file:
         for query in queries:
             sql_file.write(json.dumps(query, separators=(',',':')))
             sql_file.write('\n')
+        print(file_name)
 
-    #
-    # def chunks(l, n):
-    #     """Yield successive n-sized chunks from l."""
-    #     for i in range(0, len(l), n):
-    #         yield l[i:i + n]
 
-    # paths = all_paths(pedigrees, 'submitted_file', 'program')
-    # for path in paths:
-    #     print('-')
-    #     for node in path:
-    #         print('{}->{}: {}'.format(node['src_type'], node['dst_type'], node['link']['edge_table_name']))
-    #
-    #
-    # # [G.get_edge_data(p[0],p[1])[0]['edge_table_name'] for p in chunks(paths, 2)]
+# G=nx.MultiDiGraph()
+# G.add_nodes_from(pedigrees.keys())
+# for k,l in link_lookup.items():
+#     source, destination = k.split('-')
+#     G.add_edges_from([(source, destination, l)])
+#
+#
+# dfs = nx.algorithms.traversal.depth_first_search
+# T = dfs.dfs_tree(G, 'case', 2)
+#
+# def children(source, items=[], parent=None):
+#     edges = T.edges([source])
+#     if len(edges):
+#         for e in edges:
+#             children(e[1], items=items, parent=source)
+#     if parent:
+#         items.append('{}->{}'.format(parent, source))
+#     return items
+#
+# print(children('case'))
