@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, default_parser, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 LOOKUP_PATHS = """
@@ -25,7 +25,7 @@ source/bcc/genome_build.json
 """.strip().split()
 
 
-def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback=None):
+def transform(item_paths, output_dir, experiment_code, project_id, compresslevel=0, callback=None):
     """Read bcc labkey json and writes gen3 json."""
     alleles_emitter = emitter('allele', output_dir=output_dir)
     alleles = {}
@@ -40,9 +40,11 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback
                 'submitter_id': line['lsid']}
             if line['lsid'] in alleles:
                 allele = alleles[line['lsid']]
+            allele['project_id'] = project_id
             allele.update(line)
             alleles[line['lsid']] = allele
     for k in alleles:
+        alleles[k] = obscure_dates(alleles[k], output_dir=output_dir)
         alleles_emitter.write(alleles[k])
     alleles_emitter.close()
 
@@ -97,16 +99,18 @@ def my_pre_processor(schema):
         schema['properties'][k.split('/')[1]] = schema['properties'][k]
         del schema['properties'][k]
     for k in [k for k in schema['properties'] if k.endswith('_id')]:
+        if k in ['submitter_id', 'project_id']:
+            continue
         schema['properties'][k.replace('_id', '')] = {'type': ['string', "'null'"]}  # schema['properties'][k]
         del schema['properties'][k]
-
     return schema
 
 
 if __name__ == "__main__":
     item_paths = ['source/bcc/sample_genetrails_copy_number_variant.json','source/bcc/sample_genetrails_sequence_variant.json']
-    args = default_parser().parse_args()
-    transform(item_paths, output_dir=args.output_dir, experiment_code=args.experiment_code, callback=my_callback)
+    args = default_parser(DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID).parse_args()
+
+    transform(item_paths, project_id=DEFAULT_PROJECT_ID, output_dir=args.output_dir, experiment_code=args.experiment_code, callback=my_callback)
 
     # glob.glob("output/bcc/*.json")
     if args.schema:

@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 LOOKUP_PATHS = """
@@ -29,6 +29,7 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback
                 'aliquot': {'submitter_id': '{}-aliquot'.format(line['sample_code'])},
                 'submitter_id': line['lsid']}
             bcc_aliquot.update(line)
+            bcc_aliquot = obscure_dates(bcc_aliquot, output_dir=output_dir)
             bcc_aliquot_emitter.write(bcc_aliquot)
     bcc_aliquot_emitter.close()
 

@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 LOOKUP_PATHS = """
@@ -45,6 +45,7 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback
             if 'gene_symbol' in line and line['gene_symbol'].lower() in gene_lookup:
                 line['gene'] = {'submitter_id': gene_lookup[line['gene_symbol'].lower()], 'project_id': 'smmart-reference'}
             genetrails_variant.update(line)
+            genetrails_variant = obscure_dates(genetrails_variant, output_dir=output_dir)
             genetrails_emitter.write(genetrails_variant)
     genetrails_emitter.close()
 
@@ -75,6 +76,8 @@ def my_callback(line):
         del line[k]
 
     for k in [k for k in line if k.endswith('_id')]:
+        if k in ['submitter_id', 'project_id']:
+            continue
         lup = k.replace('_id', '')
         if line[k]:
             try:
@@ -103,6 +106,8 @@ def my_schema_callback(schema):
         schema['properties'][k.split('/')[1]] = schema['properties'][k]
         del schema['properties'][k]
     for k in [k for k in schema['properties'] if k.endswith('_id')]:
+        if k in ['submitter_id', 'project_id']:
+            continue        
         schema['properties'][k.replace('_id', '')] = {'type': ['string', "'null'"]}  # schema['properties'][k]
         del schema['properties'][k]
     # adds the source property

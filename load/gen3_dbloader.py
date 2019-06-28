@@ -80,11 +80,11 @@ def upload(path, program, project, submission_client, delete_first,output_dir):
 
         tables['handle'].close()
         node_path = '{}/{}/{}.tsv'.format(output_dir, project, tables['node_table'])
-        print("cat ~/gen3_etl/{} | $psql -c \"copy {}(node_id, acl, _sysan,  _props) from stdin  csv delimiter E'\\x01' quote E'\\x02' ;\"".format(node_path, tables['node_table']))
+        print("cat  $DATA/{} | $psql -c \"copy {}(node_id, acl, _sysan,  _props) from stdin  csv delimiter E'\\x01' quote E'\\x02' ;\"".format(node_path, tables['node_table']))
         for l in tables['links']:
             l['handle'].close()
             edge_path = '{}/{}/{}.tsv'.format(output_dir, project, l['edge_table'])
-            print("cat ~/gen3_etl/{} | $psql -c \"copy {}(src_id, dst_id, acl, _sysan, _props) from stdin  csv delimiter E'\\x01' quote E'\\x02' ;\"".format(edge_path, l['edge_table']))
+            print("cat  $DATA/{} | $psql -c \"copy {}(src_id, dst_id, acl, _sysan, _props) from stdin  csv delimiter E'\\x01' quote E'\\x02' ;\"".format(edge_path, l['edge_table']))
 
 
 def get_tables(submission_client, line):

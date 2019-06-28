@@ -63,6 +63,7 @@ queries = [
         "image_plot",
         "OtherTreatments",
         "CirculatingTumorAndHybridCells",
+        "admindemographics"
     ]
   },
   {
@@ -162,6 +163,7 @@ queries = [
         'mihc_cell_type',
         'mihc_measure_type',
         'participant_status',
+        'patientviewer_dashboard_componenttypes',
         'protein_variant',
         'reason_observation_not_available',
         'RnaSeqMetaData',
@@ -195,7 +197,7 @@ queries = [
         'unit_of_measure',
         'unit_of_measure_alt_name',
         'UnitOfMeasure',
-        'validation_severity',
+        'validation_severity'        
     ]
   },
 ]
@@ -213,7 +215,11 @@ def save_results(server_context, schema_name, query_name):
     if os.path.isfile(p):
         print('{} already exists'.format(p))
         return
-    result = labkey.query.select_rows(server_context=server_context, schema_name=schema_name, query_name=query_name)
+    try:
+        result = labkey.query.select_rows(server_context=server_context, schema_name=schema_name, query_name=query_name)
+    except Exception as e:
+        print(e)
+        return
     if result['rowCount'] == 0:
         print('{}.{} has no data'.format(schema_name, query_name))
         return
