@@ -6,7 +6,7 @@ import json
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_aliquot, default_sample, default_diagnosis, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_aliquot, default_sample, default_diagnosis, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 

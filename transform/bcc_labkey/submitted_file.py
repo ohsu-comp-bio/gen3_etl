@@ -11,31 +11,19 @@ from gen3_etl.utils.schema import generate, template
 
 def transform_gen3(item_paths, output_dir, project_id, compresslevel=0):
     """Creates gen3.treatment, returns set of treatment_ids."""
-    cases = set([line['submitter_id'] for line in reader('{}/case.json'.format(output_dir))])
-
     submitted_file_emitter = emitter('submitted_file', output_dir=output_dir)
     for item_path in item_paths:
-        submitted_files = [line for line in reader(item_path)]
-        # missing_cases = [b['MRN'] for b in submitted_files if b['MRN'] not in case_lookup]
-        def add_case(b):
-            case_submitter_id = case_lookup[b['MRN']]
-            submitter_id = '{}-{}-bcc_submitted_file'.format(case_submitter_id, b['ID_Event'])
-            for p in ["MRN", "Participant ID", "_not_available_notes", "_not_available_reason_id", "cBiomarker Label dont use",]:
-                del b[p]
-            for p in ["CA19 Values After Specimen Collection", "Order Proc ID", "assay version id", "submitted_file level", "unit of measure id", ]:
-                new_p = p.replace(' ','_').lower()
-                b[new_p] = b[p]
-                del b[p]
-            b['csubmitted_file_label'] = b["cBiomarker Label use this"]
-            del b["cBiomarker Label use this"]
-            submitted_file = {'type': 'bcc_submitted_file', 'cases': {'submitter_id': case_submitter_id }, 'submitter_id': submitter_id,
-                         'project_id': project_id}
-
-            submitted_file.update(b)
-            return submitted_file
-        submitted_files_with_case = [add_case(b) for b in submitted_files if b['MRN'] in case_lookup]
-        print('there are',len(submitted_files_with_case), 'submitted_files with cases, out of ', len(submitted_files), 'submitted_files')
-        [submitted_file_emitter.write(b) for b in submitted_files_with_case]
+        for line in reader(item_path):
+            submitter_id = '{}-{}'.format(line['participantid'], line['document'])
+            submitted_file = {
+                'type': 'bcc_submitted_file',
+                'cases': {'submitter_id': line['participantid'] },
+                'submitter_id': submitter_id,
+                'project_id': project_id }
+            submitted_file.update(line)
+            for k in [ "_labkeyurl_data_owner", "_labkeyurl_doctype_id", "_labkeyurl_document", "_labkeyurl_participantid", ]:
+                del submitted_file[k]
+            submitted_file_emitter.write(submitted_file)
     submitted_file_emitter.close()
 
 

@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 LOOKUP_PATHS = """
@@ -27,7 +27,7 @@ source/bcc/genome_build.json
 
 def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback=None):
     """Read bcc labkey json and writes gen3 json."""
-    genetrails_emitter = emitter('genetrails_variant', output_dir=output_dir)
+    genetrails_emitter = emitter('wes_result', output_dir=output_dir)
     with open('output/reference/gene_lookup.tsv') as f:
         gene_lookup = {k: v for k,v in (line.split() for line in f) }
 
@@ -37,10 +37,13 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0, callback
             line['source'] = source
             if callback:
                 line = callback(line)
+            submitter_id = line.get('participantid', line.get('ParticipantID', None))
+            aliquot_id = '{}-sample-aliquot'.format(submitter_id)
+            
             genetrails_variant = {
-                'type': 'genetrails_variant',
+                'type': 'wes_result',
                 'project_id': DEFAULT_PROJECT_ID,
-                'aliquot': {'submitter_id': '{}-aliquot'.format(line['sample_code'])},
+                'aliquot': {'submitter_id': aliquot_id},
                 'submitter_id': line['lsid']}
             if 'gene_symbol' in line and line['gene_symbol'].lower() in gene_lookup:
                 line['gene'] = {'submitter_id': gene_lookup[line['gene_symbol'].lower()], 'project_id': 'smmart-reference'}
@@ -75,6 +78,8 @@ def my_callback(line):
         del line[k]
 
     for k in [k for k in line if k.endswith('_id')]:
+        if k in ['project_id', 'submitter_id']:
+            continue
         lup = k.replace('_id', '')
         if line[k]:
             try:
@@ -103,6 +108,8 @@ def my_schema_callback(schema):
         schema['properties'][k.split('/')[1]] = schema['properties'][k]
         del schema['properties'][k]
     for k in [k for k in schema['properties'] if k.endswith('_id')]:
+        if k in ['project_id', 'submitter_id']:
+            continue
         schema['properties'][k.replace('_id', '')] = {'type': ['string', "'null'"]}  # schema['properties'][k]
         del schema['properties'][k]
     # adds the source property
@@ -110,15 +117,14 @@ def my_schema_callback(schema):
     schema['properties']['aliquot'] = {'$ref': '_definitions.yaml#/to_one'}
     return schema
 
-    return schema
-
 
 if __name__ == "__main__":
-    item_paths = ['source/bcc/sample_genetrails_copy_number_variant.json','source/bcc/sample_genetrails_sequence_variant.json']
+    item_paths = ['source/bcc/WESResults.json']
     args = default_parser(DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID).parse_args()
     transform(item_paths, output_dir=args.output_dir, experiment_code=args.experiment_code, callback=my_callback)
 
-    link = {'name':'aliquot', 'backref':'genetrails', 'label':'derived_from', 'target_type':'aliquot',  'multiplicity': 'many_to_one', 'required': False }
-    schema_path = generate(item_paths,'genetrails_variant', output_dir='output/bcc', links=[link], callback=my_schema_callback)
+    item_paths = ['output/bcc/wes_result.json']
+    link = {'name':'aliquot', 'backref':'wes_result', 'label':'derived_from', 'target_type':'aliquot',  'multiplicity': 'many_to_one', 'required': False }
+    schema_path = generate(item_paths,'wes_result', output_dir='output/bcc', links=[link], callback=my_schema_callback)
     assert os.path.isfile(schema_path), 'should have an schema file {}'.format(schema_path)
     print(schema_path)

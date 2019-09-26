@@ -9,13 +9,15 @@ from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJEC
 from gen3_etl.utils.schema import generate, template
 
 
-def t(output_dir):
-    """Read bcc labkey json and writes gen3 json."""
-    cases = set([])
-    for line in reader('{}/bcc_participant.json'.format(output_dir)):
-        cases.add(line['submitter_id'])
-sss
 
+def transform(item_paths, output_dir, experiment_code, compresslevel=0):
+    """Reads bcc labkey json and writes participantid, dob json."""
+    dob_emitter = emitter('bcc_participant_dob', output_dir=output_dir)
+
+    for p in item_paths:
+        for line in reader(p):
+            dob_emitter.write({'participantid': line['ParticipantID'], 'DateOfBirth': line['DateOfBirth']})
+    dob_emitter.close()
 
 if __name__ == "__main__":
-    t('output/bcc')
+    transform(['source/bcc/admindemographics.json'] , DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE)

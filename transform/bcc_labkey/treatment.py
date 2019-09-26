@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, default_treatment, missing_parent, save_missing_parents
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, default_treatment, missing_parent, save_missing_parents, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 LOOKUP_PATHS = """
@@ -46,6 +46,7 @@ def transform_gen3(item_paths, output_dir, project_id, compresslevel=0):
                 continue
             treatment_ids.add(treatment_submitter_id)
             treatment = default_treatment(treatment_submitter_id, diagnosis_submitter_id, treatment_type, project_id)
+            treatment = obscure_dates(treatment, output_dir=output_dir, participantid=participantid)
             treatment_emitter.write(treatment)
     save_missing_parents(missing_diagnoses)
     return treatment_ids
@@ -69,9 +70,10 @@ def transform_chemotherapy(item_paths, output_dir, project_id, treatment_ids, co
                 'type': 'bcc_chemotherapy',
                 'project_id': project_id,
                 'treatment': {'submitter_id': treatment_submitter_id},
-                'submitter_id': '{}-{}-{}'.format(treatment_submitter_id, line['date'], line.get('treatment_description', line.get('treatment_agent', 'na')))
+                'submitter_id': '{}-{}-{}'.format(treatment_submitter_id, line['days'], line.get('treatment_description', line.get('treatment_agent', 'na')))
                 }
             bcc_treatment.update(line)
+            bcc_treatment = obscure_dates(bcc_treatment, output_dir=output_dir)
             bcc_treatment_emitter.write(bcc_treatment)
     bcc_treatment_emitter.close()
 
@@ -107,6 +109,7 @@ def transform_surgery(item_paths, output_dir, project_id, treatment_ids, compres
             if 'type' in line and p == 'source/bcc/vResectionDate.json':
                 del line['type']
             bcc_treatment.update(line)
+            bcc_treatment = obscure_dates(bcc_treatment, output_dir=output_dir)
             bcc_treatment_emitter.write(bcc_treatment)
     bcc_treatment_emitter.close()
 
@@ -139,7 +142,10 @@ def transform_radiotherapy(item_paths, output_dir, project_id, treatment_ids, co
                 'treatment': {'submitter_id': treatment_submitter_id},
                 'submitter_id': bcc_treatment_submitter_id
                 }
+            line['radiotherapy_type'] = line['type']
+            del line['type']
             bcc_treatment.update(line)
+            bcc_treatment = obscure_dates(bcc_treatment, output_dir=output_dir)
             bcc_treatment_emitter.write(bcc_treatment)
     bcc_treatment_emitter.close()
 
@@ -187,6 +193,7 @@ def my_callback(line):
         line['gene_symbol'] = line['gene']
         del line['gene']
 
+    line = obscure_dates(line)
     return line
 
 
@@ -230,8 +237,7 @@ if __name__ == "__main__":
     ]
     transform_chemotherapy(item_paths, treatment_ids=treatment_ids, output_dir=args.output_dir, project_id=args.project_id)
     item_paths = [
-        'source/bcc/treatment_chemotherapy_ohsu.json',
-        'source/bcc/treatment_chemotherapy_manually_entered.json'
+        'output/bcc/bcc_chemotherapy.json',
     ]
     link = {'name':'treatment', 'backref':'bcc_chemotherapy', 'label':'describes', 'target_type':'treatment',  'multiplicity': 'many_to_one', 'required': False }
     schema_path = generate(item_paths,'bcc_chemotherapy', output_dir='output/bcc', links=[link], callback=my_schema_callback)
@@ -239,13 +245,12 @@ if __name__ == "__main__":
     print(schema_path)
 
     item_paths = [
-        ('source/bcc/vResectionDate.json', 'Surgery', None),
-        ('source/bcc/voncologsurgery.json', 'Surgery', None),
+        ('source/bcc/vResectionDate.json', 'Surgery', my_callback),
+        ('source/bcc/voncologsurgery.json', 'Surgery', my_callback),
     ]
     transform_surgery(item_paths, treatment_ids=treatment_ids, output_dir=args.output_dir, project_id=args.project_id)
     item_paths = [
-        'source/bcc/vResectionDate.json',
-        'source/bcc/voncologsurgery.json'
+        'output/bcc/bcc_surgery.json',
     ]
     link = {'name':'treatment', 'backref':'bcc_surgery', 'label':'describes', 'target_type':'treatment',  'multiplicity': 'many_to_one', 'required': False }
     schema_path = generate(item_paths,'bcc_surgery', output_dir='output/bcc', links=[link], callback=my_schema_callback)
@@ -253,11 +258,11 @@ if __name__ == "__main__":
     print(schema_path)
 
     item_paths = [
-        ('source/bcc/Radiotherapy.json', 'Radiotherapy', None),
+        ('source/bcc/Radiotherapy.json', 'Radiotherapy', my_callback),
     ]
     transform_radiotherapy(item_paths, treatment_ids=treatment_ids, output_dir=args.output_dir, project_id=args.project_id)
     item_paths = [
-        'source/bcc/Radiotherapy.json',
+        'output/bcc/bcc_radiotherapy.json',
     ]
     link = {'name':'treatment', 'backref':'bcc_radiotherapy', 'label':'describes', 'target_type':'treatment',  'multiplicity': 'many_to_one', 'required': False }
     schema_path = generate(item_paths,'bcc_radiotherapy', output_dir='output/bcc', links=[link], callback=my_schema_callback)

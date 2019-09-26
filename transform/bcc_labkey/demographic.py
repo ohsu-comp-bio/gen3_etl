@@ -6,7 +6,7 @@ import json
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 
@@ -32,15 +32,17 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
             bcc_demographic.update(line)
             bcc_demographics[bcc_submitter_id] = bcc_demographic
     for k in demographics:
+        demographics[k] = obscure_dates(demographics[k], output_dir=output_dir, participantid=demographics[k]['cases']['submitter_id'])
         demographics_emitter.write(demographics[k])
     demographics_emitter.close()
     for k in bcc_demographics:
+        bcc_demographics[k] = obscure_dates(bcc_demographics[k], output_dir=output_dir)
         bcc_demographics_emitter.write(bcc_demographics[k])
     bcc_demographics_emitter.close()
 
 
 if __name__ == "__main__":
-    item_paths = ['source/bcc/vDemoGraphicsForPlot.json']
+    item_paths = ['source/bcc/vDemographicsForPlot.json']
     args = default_parser(DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID).parse_args()
     transform(item_paths, output_dir=args.output_dir, experiment_code=args.experiment_code)
 
