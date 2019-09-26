@@ -9,6 +9,8 @@ from gen3.submission import Gen3Submission
 from gen3_etl.utils.collections import grouper
 import logging
 import hashlib
+import multiprocessing as mp
+
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -60,18 +62,25 @@ def create_node(submission_client, program_name, project_code, node):
                 #     raise e
 
 def delete_type(submission_client, program, project, batch_size, t):
-    response = submission_client.export_node_all_type(program, project, t)
-    if 'data' not in response:
-        print('no data?', response, file=sys.stderr)
+    response = submission_client.export_node(program, project, node_type=t, fileformat='json')
+    pool = mp.Pool(mp.cpu_count())
+
+    def collect_result(delete_response):
+        delete_response = json.loads(delete_response)
+        assert delete_response['code'] == 200, delete_response
+        print('deleted {} {}'.format(t, delete_response['message']), file=sys.stderr)
+
+    if 'data' not in response or len(response['data']) == 0:
+        print(f'No {t} to delete {response}', file=sys.stderr)
     else:
         for ids in grouper(batch_size, [n['node_id'] for n in response['data']]):
-            len_ids = len(ids)
+            print(f'deleting {len(ids)}', file=sys.stderr)
             ids = ','.join(ids)
-            delete_response = submission_client.delete_node(program, project, ids)
-            delete_response = json.loads(delete_response)
-            assert delete_response['code'] == 200, delete_response
-            print('deleted {} {}'.format(len_ids, t), file=sys.stderr)
-
+            pool.apply_async(submission_client.delete_record, args=(program, project, ids), callback=collect_result)
+        # Close Pool and let all the processes complete
+        # postpones the execution of next line of code until all processes in the queue are done
+        pool.close()
+        pool.join()
 
 def delete_all(submission_client, program, project, batch_size=200, types=['submitted_methylation', 'aliquot', 'sample', 'demographic', 'case', 'experiment']):
     """Delete all nodes in types hierarchy."""

@@ -24,9 +24,9 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
                 continue
             submitter_ids.append(submitter_id)
             bcc_submitter_id = '{}-{}'.format(submitter_id, source)
-            case = {'type': 'case', 'experiments': {'submitter_id': experiment_code}, 'submitter_id': submitter_id, 'project_id': DEFAULT_PROJECT_ID}
+            primary_site = line.get('site', None)
+            case = {'type': 'case', 'experiments': {'submitter_id': experiment_code}, 'primary_site': primary_site, 'submitter_id': submitter_id, 'project_id': DEFAULT_PROJECT_ID}
             bcc_case = {'type': 'bcc_participant', 'case': {'submitter_id': submitter_id}, 'source': source, 'submitter_id': bcc_submitter_id, 'project_id': DEFAULT_PROJECT_ID}
-
             cases[submitter_id] = case
             if bcc_submitter_id in bcc_cases:
                 # merge dupes

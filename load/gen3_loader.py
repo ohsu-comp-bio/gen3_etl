@@ -3,6 +3,7 @@ import os
 from glob import glob
 import json
 import sys
+import multiprocessing as mp
 
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
@@ -22,6 +23,11 @@ DEFAULT_ENDPOINT = 'https://localhost'
 
 def upload(path, program, project, submission_client, batch_size, delete_first):
     """Read gen3 json and write to gen3."""
+    pool = mp.Pool(mp.cpu_count())
+
+    def collect_result(upload_response):
+        pass
+
     for p in glob(path):
         deleted = False
         for lines in grouper(batch_size, reader(p)):
@@ -47,7 +53,13 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
             if not deleted and delete_first:
                 delete_all(submission_client, program, project, types=[nodes[0]['type']])
                 deleted = True
-            create_node(submission_client, program, project, nodes)
+
+            pool.apply_async(create_node, args=(submission_client, program, project, nodes), callback=collect_result)
+
+    print(f'pool.close/join')
+    pool.close()
+    pool.join()  # postpones the execution of next line of code until all processes in the queue are done
+
 
 
 if __name__ == "__main__":
