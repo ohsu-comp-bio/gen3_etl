@@ -1,6 +1,7 @@
 """Utility, deletes projects and nodes.  Edit types array for your deployment."""
 import os
 import sys
+import logging
 
 from gen3_etl.utils.cli import default_argument_parser
 from gen3_etl.utils.gen3 import delete_all, submission_client
@@ -12,7 +13,7 @@ DEFAULT_ENDPOINT = 'https://localhost'
 DEFAULT_TYPES = ['submitted_methylation', 'submitted_somatic_mutation', 'read_group', 'demographic', 'aliquot', 'sample', 'bcc_diagnosis', 'diagnosis', 'bcc_demographic', 'demographic', 'bcc_participant', 'case', 'experiment']
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_DROP_PROJECT = False
-
+logger = logging.getLogger('gen3_deleter')
 
 def delete(program, project, submission_client, types=DEFAULT_TYPES, batch_size=DEFAULT_BATCH_SIZE, drop_project=DEFAULT_DROP_PROJECT):
     """Delete all content from project."""
@@ -54,6 +55,9 @@ if __name__ == "__main__":
     parser.add_argument('--drop_project', type=bool,
                         default=DEFAULT_DROP_PROJECT,
                         help=f'Drop project ({DEFAULT_DROP_PROJECT}).')
+
+    log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    logging.basicConfig(level=logging.INFO, format=log_fmt)
 
     args = parser.parse_args()
     delete(program=args.program,

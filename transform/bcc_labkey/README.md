@@ -14,27 +14,15 @@ python3 transform/bcc_labkey/harvest.py
 To transform
 
 ```
-
-python3 transform/bcc_labkey/date_shift.py
 python3 transform/bcc_labkey/case.py
-python3 transform/bcc_labkey/demographic.py
 python3 transform/bcc_labkey/diagnosis.py
-python3 transform/bcc_labkey/observation.py
-python3 transform/bcc_labkey/treatment.py
+python3 transform/bcc_labkey/demographic.py
 python3 transform/bcc_labkey/sample.py
 python3 transform/bcc_labkey/aliquot.py
 
-python3 transform/bcc_labkey/allele.py
 python3 transform/bcc_labkey/genetrails_variant.py
-python3 transform/bcc_labkey/submitted_file.py
-python3 transform/bcc_labkey/wes_result.py
+python3 transform/bcc_labkey/treatment.py
 
-export EP='--endpoint https://gen3.compbio.ohsu.edu'
-export PP='--program ohsu --project bcc'
-
-
-export psql='docker-compose exec -T --user postgres postgres psql -d metadata_db'
-export psql='docker-compose exec --user postgres postgres psql -d metadata_db'
 
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/case.json --delete_first true
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/bcc_participant.json  --delete_first true
@@ -54,12 +42,14 @@ python3 load/gen3_dbloader.py $EP $PP --path output/bcc/genetrails_variant.json 
 
 python3 load/gen3_dbloader.py $EP $PP --path output/bcc/treatment.json --delete_first true
 
+python3 load/gen3_dbloader.py $EP $PP --path output/bcc/bcc_chemotherapy.json --delete_first true
 
 ```
 
 To delete
 
 ```
+\c metadata_db ;
 # Quick delete, log into postgres
 delete from node_acknowledgement          where _props->>'project_id' = 'ohsu-bcc'  ;
 delete from node_alignedreadsindex        where _props->>'project_id' = 'ohsu-bcc'  ;
@@ -109,14 +99,15 @@ To load
 ```
 
 # export EP='--endpoint https://localhost'
-# export EP='--endpoint https://gen3.compbio.ohsu.edu'
+#
+export EP='--endpoint https://gen3.compbio.ohsu.edu'
 export PP='--program ohsu --project bcc'
 python3 load/gen3_deleter.py $EP  $PP
 
 python3 load/gen3_loader.py $EP $PP --path output/bcc/project.json
 python3 load/gen3_loader.py $EP $PP --path output/bcc/experiment.json
 
-python3 load/gen3_loader.py $EP $PP --path output/bcc/case.json
+python3 load/gen3_loader.py $EP $PP --path output/bcc/cases.json
 python3 load/gen3_loader.py $EP $PP --path output/bcc/bcc_participant.json
 
 python3 load/gen3_loader.py $EP $PP --path output/bcc/demographic.json

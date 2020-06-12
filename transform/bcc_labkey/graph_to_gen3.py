@@ -60,6 +60,18 @@ def age_at_diagnosis(case, diagnosis):
         pprint(diagnosis)
         raise e
 
+def days_to_birth(case, event):
+    """Time interval from a person's date of birth to the
+       date of event, represented as a calculated negative number of day."""
+    if 'dateofbirth' not in case or case['dateofbirth'] is None:
+        return None
+    try:
+        return int((convert(event['timestamp']) - convert(case['dateofbirth'])).days * -1)
+    except Exception as e:
+        pprint(event)
+        raise e
+
+
 def morphology(case, diagnosis):
     if 'stage' not in diagnosis:
         return 'Unknown'
@@ -204,10 +216,11 @@ def ajcc_pathologic_t(case, diagnosis):
     return f"T{diagnosis['stage']['tumor']}"
 
 def make_diagnosis(case, diagnosis, project_id='ohsu-bcc'):
-    diagnosis = {
+    gen3_diagnosis = {
       "type": "diagnosis",
       "age_at_diagnosis": age_at_diagnosis(case, diagnosis),
       "classification_of_tumor": 'Unknown',
+      "days_to_birth": diagnosis['days_to_birth'],
       "days_to_last_follow_up": None,
       "days_to_last_known_disease_status": None,
       "days_to_recurrence": None,
@@ -234,39 +247,46 @@ def make_diagnosis(case, diagnosis, project_id='ohsu-bcc'):
       },
       # "source": diagnosis['source'],
     }
-    if diagnosis['ajcc_pathologic_stage'] == 'Unknown':
-        del diagnosis['ajcc_pathologic_stage']
-    return diagnosis
+    if gen3_diagnosis['ajcc_pathologic_stage'] == 'Unknown':
+        del gen3_diagnosis['ajcc_pathologic_stage']
+
+    # _days_to_birth = days_to_birth(case, diagnosis)
+    # if _days_to_birth:
+    #   gen3_diagnosis["days_to_birth"] = _days_to_birth
+
+    return gen3_diagnosis
 
 def gender(case):
     if 'gender' not in case:
         return None
     return case['gender'].lower()
 
-def year_of_birth(case):
-    if 'dateofbirth' not in case:
-        return None
-    return convert(case['dateofbirth']).year
-
+# def year_of_birth(case):
+#     if 'dateofbirth' not in case:
+#         return None
+#     return convert(case['dateofbirth']).year
+#
 def year_of_death(case):
     if 'dateofdeath' not in case or not case['dateofdeath']:
         return None
-    return convert(case['dateofdeath']).year
-
+    return int((convert(case['dateofdeath']) - convert(case['dateofbirth'])).days * -1)
 
 def make_demographic(case, project_id='ohsu-bcc'):
-    return {
+    demographic = {
       "gender": gender(case),
       "type": "demographic",
-      "year_of_birth": year_of_birth(case),
+      # "year_of_birth": year_of_birth(case),
       "cases": {
         "submitter_id": case['submitter_id']
       },
       "submitter_id": f"{case['submitter_id']}/demographic",
       "project_id": project_id,
-      "year_of_death": year_of_death(case),
       # "source": case['source'],
     }
+    _year_of_death = year_of_death(case)
+    if _year_of_death:
+        demographic["year_of_death"] = year_of_death(case)
+    return demographic
 
 def tissue_type(sample):
     # tissue_type = sample['origin']
@@ -285,7 +305,7 @@ def sample_type(sample):
     return sample_type
 
 def make_sample(case, sample):
-    return {
+    gen3_sample = {
       "submitter_id": sample['submitter_id'],
       "cases": {
         "submitter_id": case['submitter_id']
@@ -321,10 +341,15 @@ def make_sample(case, sample):
       # "initial_weight": null,
       # "longest_dimension": null
     }
+    _days_to_birth = days_to_birth(case, sample)
+    if _days_to_birth:
+      gen3_sample["days_to_birth"] = _days_to_birth
+    return gen3_sample
+
 
 def make_read_group(case, sample, aliquot, read_group):
     return {
-      "submitter_id": f'{aliquot}/read_group',
+      "submitter_id": f"{aliquot['submitter_id']}/read_group/{read_group['timestamp']}",
       "aliquots": {
         "submitter_id": aliquot['submitter_id']
       },
@@ -390,13 +415,28 @@ def make_allele(case, sample, aliquot, read_group, allele):
 
 
 def make_treatment(case, diagnosis, treatment):
-    return {
-      "diagnoses": {
-        "submitter_id": diagnosis['submitter_id'],
-      },
+        # treatment.source
+        # "Radiotherapy"
+        # "treatment_chemotherapy_manually_entered"
+        # "treatment_chemotherapy_ohsu"
+        # "treatment_chemotherapy_regimen"
+
+      # {
+      #   "source": "treatment_chemotherapy_ohsu",
+      #   "unit_of_measure": "Milligram",
+      #   "treatment_description": "INV SUGAMMADEX 200 MG/2 ML INTRAVENOUS SOLUTION (IRB 16351)",
+      #   "title": "6766__04/19/18__SUGAMMADEX",
+      #   "treatment_agent": "SUGAMMADEX",
+      #   "delivery_method": "CHEMOEMBOLIZATION",
+      #   "total_dose": 200,
+      #   "timestamp": "2018-04-19T16:01:00",
+      #   "submitter_id": "6766/treatment_chemotherapy_ohsu/2018-04-19 16:01:00/c8f7102a-ba00-11e9-92ec-005056be6474",
+      #   "type": "treatment"
+      # }
+    gen3_treatment = {
       "type": "treatment",
       "submitter_id": treatment['submitter_id'] ,
-      "source": treatment['source'],
+      # "source": treatment['source'],
       # "days_to_treatment_start": null,
       # "treatment_type": null,
       # "days_to_treatment": null,
@@ -409,6 +449,108 @@ def make_treatment(case, diagnosis, treatment):
       # "treatment_or_therapy": null
     }
 
+    _treatment_type = None
+    if 'chemotherapy' in treatment['source'].lower():
+        _treatment_type = 'Chemotherapy'
+    if 'radiotherapy' in treatment['source'].lower():
+        _treatment_type = 'Radiation Therapy'
+    if 'surgery' in treatment['source'].lower():
+        _treatment_type = 'Surgery'
+    if _treatment_type:
+        gen3_treatment["treatment_type"] = _treatment_type
+
+    if 'therapeutic_agent' in treatment and treatment['therapeutic_agent']:
+        gen3_treatment["therapeutic_agents"] = treatment['therapeutic_agent']
+
+
+    if diagnosis:
+        gen3_treatment["diagnoses"] = {"submitter_id": diagnosis['submitter_id']}
+    if case:
+        gen3_treatment["cases"] = {"submitter_id": case['submitter_id']}
+        _days_to_birth = days_to_birth(case, treatment)
+        if _days_to_birth:
+          gen3_treatment["days_to_birth"] = _days_to_birth
+
+    return gen3_treatment
+
+def measurement(observation):
+    keys = ['height', 'weight', 'result_number_value', 'sizeaxis1', 'biomarker_level']
+    value = None
+    for k in keys:
+        value = observation.get(k, None)
+        if value:
+            break
+    return value
+
+def measurement2(observation):
+    keys = ['sizeaxis2']
+    value = None
+    for k in keys:
+        value = observation.get(k, None)
+        if value:
+            break
+    return value
+
+
+def measurement3(observation):
+    keys = ['sizeaxis3']
+    value = None
+    for k in keys:
+        value = observation.get(k, None)
+        if value:
+            break
+    return value
+
+def measurement_description(observation):
+    keys = ['glycemic_assay', 'notes', 'image_site_description', 'comments']
+    values = []
+    for k in keys:
+        value = observation.get(k, None)
+        if value:
+            values.append(value)
+    if len(values) > 0:
+        return ' '.join(values)
+    return None
+
+def unit_of_measure(observation):
+    return observation.get('unit_of_measure', observation.get('glycemic_unit_of_measure', None))
+
+def make_observation(case, observation):
+    gen3_observation = {
+      "days_to_birth": days_to_birth(case, observation),
+      "type": "observation",
+      "submitter_id": observation['submitter_id'],
+      "cases": {
+        "submitter_id": case['submitter_id']
+      },
+      "observation_type": observation['source']
+    }
+
+    _measurement = measurement(observation)
+    if _measurement:
+      gen3_observation["measurement"] = _measurement
+
+    _measurement = measurement2(observation)
+    if _measurement:
+      gen3_observation["measurement2"] = _measurement
+
+    _measurement = measurement3(observation)
+    if _measurement:
+      gen3_observation["measurement3"] = _measurement
+
+    _description = measurement_description(observation)
+    if _description:
+      gen3_observation["description"] = _description
+    _unit_of_measure = unit_of_measure(observation)
+    if _unit_of_measure:
+      gen3_observation["unit_of_measure"] = _unit_of_measure
+    if 'lesion_key' in observation:
+      gen3_observation["observation_key"] = observation["lesion_key"]
+
+    return gen3_observation
+
+
+
 
 cases = open('output/bcc/cases.json', 'w')
 diagnoses = open('output/bcc/diagnoses.json', 'w')
@@ -418,6 +560,7 @@ samples = open('output/bcc/samples.json', 'w')
 aliquots = open('output/bcc/aliquots.json', 'w')
 read_groups = open('output/bcc/read_groups.json', 'w')
 alleles = open('output/bcc/alleles.json', 'w')
+observations = open('output/bcc/observations.json', 'w')
 
 with open('output/bcc/graph.json') as input:
     for line in input:
@@ -426,10 +569,18 @@ with open('output/bcc/graph.json') as input:
         cases.write('\n')
         json.dump(make_demographic(line), demographics)
         demographics.write('\n')
+        if 'treatments' in line:
+            for treatment in line['treatments']:
+                json.dump(make_treatment(line, None, treatment), treatments)
+                treatments.write('\n')
         if 'diagnoses' in line:
             for diagnosis in line['diagnoses']:
                 json.dump(make_diagnosis(line, diagnosis), diagnoses)
                 diagnoses.write('\n')
+        if 'observations' in line:
+            for observation in line['observations']:
+                json.dump(make_observation(line, observation), observations)
+                observations.write('\n')
         if 'samples' in line:
             for sample in line['samples']:
                 json.dump(make_sample(line, sample), samples)
@@ -453,5 +604,5 @@ aliquots.close()
 read_groups.close()
 alleles.close()
 treatments.close()
-
+observations.close()
 # set([''.join(sample.keys()) for sample in original_samples[:10]])

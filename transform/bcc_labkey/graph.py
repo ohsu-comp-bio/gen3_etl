@@ -1,6 +1,7 @@
 import os
 import re
 import json
+
 from pprint import pprint
 from dateutil.parser import parse
 from gen3_etl.utils.ioutils import reader
@@ -13,6 +14,21 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
+# ------------------------------------------------------------------------
+
+def days_to_birth(case, event):
+    """Time interval from a person's date of birth to the
+       date of event, represented as a calculated negative number of day."""
+    if 'dateofbirth' not in case or case['dateofbirth'] is None:
+        return None
+    try:
+        return int((convert(event['timestamp']) - convert(case['dateofbirth'])).days * -1)
+    except Exception as e:
+        pprint(event)
+        raise e
+
+
+# ------------------------------------------------------------------------
 
 def compile(pattern):
   return re.compile(pattern, re.IGNORECASE)
@@ -112,6 +128,7 @@ def convert(string, fuzzy=False, debug=False):
         return string
 
 
+# ------------------------------------------------------------------------
 
 item_paths = ['source/bcc/admindemographics.json',
               'source/bcc/demographics.json']
@@ -176,6 +193,7 @@ for p in item_paths:
                 case[k.lower()] = line[k]
 
 
+# ------------------------------------------------------------------------
 
 item_paths = ['source/bcc/clinical_diagnosis.json',
               'source/bcc/clinical_narrative.json',
@@ -248,14 +266,17 @@ for p in item_paths:
         if 'stage' in obj:
             obj['stage'] = tnm(obj['stage'])
 
-        hash_object = hashlib.md5(json.dumps(obj, separators=(',',':'), default=json_serial).encode())
+        hash_object = hashlib.md5(json.dumps(line, separators=(',',':'), default=json_serial).encode())
 
-        obj['submitter_id'] = f"{case['participantid']}/{source}/{obj['timestamp']}/{hash_object.hexdigest()}"
+        _days_to_birth = days_to_birth(case, obj)
+        if _days_to_birth:
+          obj["days_to_birth"] = _days_to_birth
+
+        obj['submitter_id'] = f"{case['participantid']}/{source}/{obj['days_to_birth']}/{hash_object.hexdigest()}"
         obj['type'] = 'diagnosis'
         case['diagnoses'].append(obj)
 
-
-
+# ------------------------------------------------------------------------
 item_paths = ['source/bcc/sample.json']
 
 sample_lookup_paths = """
@@ -313,7 +334,101 @@ for p in item_paths:
         obj['type'] = 'sample'
         case['samples'].append(obj)
 
+# ------------------------------------------------------------------------
 
+item_paths = ['source/bcc/vbiolibraryspecimens.json']
+
+
+aliquots_ids = {}
+
+def aliquot_ignore(key):
+    if k.startswith('_'):
+        return True
+    if k.lower() in ['list_container', 'list_entityid', 'list_lastindexed', 'lsid', 'participantid']:
+        return True
+
+line_hashes = {}
+
+for p in item_paths:
+    source = os.path.splitext(os.path.basename(p))[0]
+    for line in reader(p):
+        line_hash = hashlib.md5(json.dumps(line, separators=(',',':'), default=json_serial).encode()).hexdigest()
+        if line_hash in line_hashes:
+            print(f'duplicate! skipping. {line}')
+            continue
+        line_hashes[line_hash] = True
+
+        participantid = line.get('participantid', line.get('ParticipantID', None))
+        if participantid not in cases:
+            print(f'source {source} participantid {participantid} not found in cases')
+            continue
+        case = cases[participantid]
+        if 'samples' not in case:
+            # print(f'source {source} participantid {participantid} has no samples')
+            case['samples'] = []
+
+        pathology_record_number = line['pathology_record_number']
+        sample_bems_id = None
+        sample = None
+        if not pathology_record_number:
+            # print(f'source {source} participantid {participantid} no pathology_record_number')
+            # create sample from parent_bems_id
+            sample_bems_id = line.get('bems_id', None)
+            if not sample_bems_id:
+                sample_bems_id = line.get('parent_bems_id', None)
+            if not sample_bems_id:
+                print(f'source {source} participantid {participantid} no pathology_record_number and no sample_bems_id')
+                continue
+            sample = {'source': source, 'sample_code': f"BEMS-{sample_bems_id}/{line['ghost_sample_path']}"}
+            sample['submitter_id'] = f"{case['participantid']}/{sample['sample_code']}"
+            sample['aliquots'] = []
+            sample['timestamp'] = convert(line.get('collection_date', None))
+            sample['sample_type'] = f"{line.get('sample_type', None)}"
+            sample['type'] = 'sample'
+            case['samples'].append(sample)
+
+        else:
+            if 'samples' not in case:
+                # print(f'source {source} participantid {participantid} {pathology_record_number} has no samples')
+                case['samples'] = []
+            # get the sample based on pathology_record_number
+            for s in case['samples']:
+                if s['sample_code'] == pathology_record_number:
+                    sample = s
+            # create a sample for the missing pathology_record_number
+            if not sample:
+                print(f'source {source} participantid {participantid} {pathology_record_number} not found in samples')
+                sample = {'source': source, 'sample_code': pathology_record_number}
+                sample['submitter_id'] = f"{case['participantid']}/{sample['sample_code']}"
+                sample['aliquots'] = []
+                sample['timestamp'] = convert(line.get('collection_date', None))
+                sample['sample_type'] = f"{line.get('sample_type', None)}"
+                sample['type'] = 'sample'
+                case['samples'].append(sample)
+        if not sample:
+            print(f'source {source} participantid {participantid} {pathology_record_number} {sample_bems_id} no sample')
+            continue
+
+        obj = {'submitter_id': f"{line['participantid']}/{line['bems_id']}/{line['pathology_record_number']}/{line['collection_date']}", 'read_groups': []}
+        for k in line:
+            if aliquot_ignore(k):
+                continue
+            if 'date' in k.lower():
+                obj[k] = convert(line[k])
+            else:
+                obj[k] = line[k]
+
+
+        if obj['submitter_id'] in aliquots_ids:
+            print(f"duplicate aliquots_ids {obj['submitter_id']}")
+            continue
+        aliquots_ids[obj['submitter_id']] = True
+        sample['aliquots'].append(obj)
+
+# done deduping
+aliquots_ids = None
+
+# ------------------------------------------------------------------------
 
 item_paths = ['source/bcc/biomarker_measurement_manually_entered.json',
               'source/bcc/biomarker_measurement_ohsu.json',
@@ -327,8 +442,13 @@ source/bcc/glycemic_unit_of_measure.json
 source/bcc/glycemic_data_source.json
 source/bcc/unit_of_measure.json
 source/bcc/glycemic_assay.json
+source/bcc/lesion_type.json
 """.strip().split()
 
+# {'type_name': 'Primary',
+#  '_labkeyurl_type_name': '/list/Oregon%20Pancreatic%20Tumor%20Registry/details.view?listId=177&pk=1',
+#  'lesion_type_id': 1,
+#  'abbreviation': None}
 def observation_lookup_values(paths):
     look_ups = {}
     for p in paths:
@@ -337,8 +457,12 @@ def observation_lookup_values(paths):
         for line in reader(p):
             name = line.get('display_name')
             val = line.get(f'{c}_id')
+            if val == None:
+                val = line.get(c)
+            if name == None:
+                name = line.get('type_name', None)
             if val == None or name == None:
-                print(line)
+                print(c)
             look_ups[c][val] = name
     return look_ups
 
@@ -355,6 +479,9 @@ def observation_lookup(k, v):
 
 def observation_ignore(k):
     return diagnosis_ignore(k)
+
+# deduping
+observations_ids = {}
 
 for p in item_paths:
     source = os.path.splitext(os.path.basename(p))[0]
@@ -380,15 +507,28 @@ for p in item_paths:
                     obj[k] = line[k]
         obj['timestamp'] = convert(line.get('date', None))
         del obj['date']
-        obj['submitter_id'] = f"{participantid}/{source}/{obj['timestamp']}"
+        hash_object = hashlib.md5(json.dumps(line, separators=(',',':'), default=json_serial).encode())
+
+        _days_to_birth = days_to_birth(case, obj)
+        if _days_to_birth:
+          obj["days_to_birth"] = _days_to_birth
+
+        obj['submitter_id'] = f"{participantid}/{source}/{obj['days_to_birth']}/{hash_object.hexdigest()}"
         obj['type'] = 'observation'
+        if obj['submitter_id'] in observations_ids:
+            print(f"duplicate {obj['submitter_id']}")
+            continue
+        observations_ids[obj['submitter_id']] = True
         case['observations'].append(obj)
+# done deduping
+observations_ids = None
 
-
+# ------------------------------------------------------------------------
 item_paths = ['source/bcc/treatment_chemotherapy_regimen.json',
               'source/bcc/treatment_chemotherapy_manually_entered.json',
               'source/bcc/treatment_chemotherapy_ohsu.json',
-              'source/bcc/Radiotherapy.json']
+              'source/bcc/Radiotherapy.json',
+              'source/bcc/voncologsurgery.json']
 
 treatment_lookup_paths = """
 source/bcc/treatment_agent.json
@@ -428,6 +568,9 @@ def treatment_ignore(k):
         return ignore
     return k.endswith('_lsid')
 
+# deduping
+treatment_ids = {}
+
 for p in item_paths:
     source = os.path.splitext(os.path.basename(p))[0]
     for line in reader(p):
@@ -449,15 +592,32 @@ for p in item_paths:
                     obj[k.replace('_id','')] = v
                 else:
                     obj[k] = line[k]
-        obj['timestamp'] = convert(line.get('date', None))
-        obj['submitter_id'] = f"{case['participantid']}/{source}/{obj['timestamp']}"
+        obj['timestamp'] = convert(line.get('date', line.get('definitive_resection_date',None)))
+        if obj['timestamp'] is None:
+            print(f"Missing date in {case['participantid']}/{source}")
+            continue
+        obj['submitter_id'] = f"{case['participantid']}/{source}/{obj['timestamp']}/{line.get('lsid', 'None')}"
+        if 'type' in obj:
+            obj['treatment_type'] = obj['type']
         obj['type'] = 'treatment'
-        del obj['date']
+        for cleanup in ['date', 'definitive_resection_date']:
+            if cleanup in obj:
+                del obj[cleanup]
+        if obj['submitter_id'] in treatment_ids:
+            print(f"duplicate {obj['submitter_id']}")
+            continue
+        treatment_ids[obj['submitter_id']] = True
         case['treatments'].append(obj)
+# done deduping
+treatment_ids = None
 
 
 def read_group_ignore(k):
     return diagnosis_ignore(k)
+
+
+# ------------------------------------------------------------------------
+item_paths = ['source/bcc/sample_genetrails_assay.json']
 
 # run_status, assay_version
 read_group_lookup_paths = """
@@ -487,7 +647,6 @@ def read_group_lookup(k, v):
     return read_group_lookups[k][v]
 
 
-item_paths = ['source/bcc/sample_genetrails_assay.json']
 for p in item_paths:
     source = os.path.splitext(os.path.basename(p))[0]
     for line in reader(p):
@@ -536,6 +695,14 @@ for p in item_paths:
           sample['aliquots'] = [{'submitter_id': f"{obj['sample_code']}/aliquot", 'read_groups': [obj]}]
           case['samples'].append(sample)
 
+
+# ------------------------------------------------------------------------
+
+item_paths = [
+    'source/bcc/sample_genetrails_sequence_variant.json',
+    'source/bcc/sample_genetrails_copy_number_variant.json',
+]
+
 def gene_trails_ignore(k):
     return diagnosis_ignore(k)
 
@@ -577,11 +744,6 @@ def gene_trails_lookup(k, v):
         return v
     return gene_trails_lookups[k][v]
 
-
-item_paths = [
-    'source/bcc/sample_genetrails_sequence_variant.json',
-    'source/bcc/sample_genetrails_copy_number_variant.json',
-]
 for p in item_paths:
     source = os.path.splitext(os.path.basename(p))[0]
     for line in reader(p):
@@ -619,7 +781,7 @@ for p in item_paths:
                                 obj[k] = line[k]
                     obj['timestamp'] = obj['date']
                     del obj['date']
-                    sample['type'] = 'allele'
+                    sample['type'] = 'sample'
                     read_group = aliquot['read_groups'][0]
                     if 'alleles' not in read_group:
                         read_group['alleles'] = []

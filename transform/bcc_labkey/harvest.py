@@ -334,7 +334,7 @@ queries = [
         'unit_of_measure',
         'unit_of_measure_alt_name',
         'UnitOfMeasure',
-        'validation_severity'        
+        'validation_severity'
 # >>>>>>> 7ccf4f86a99b546f988c487eca8fdeddc4db259a
     ]
   },
@@ -360,7 +360,6 @@ def save_results(server_context, schema_name, query_name):
         return
     try:
         result = labkey.query.select_rows(server_context=server_context, schema_name=schema_name, query_name=query_name)
-<<<<<<< HEAD
         if result['rowCount'] == 0:
             print('{}.{} has no data'.format(schema_name, query_name))
             return
@@ -372,14 +371,10 @@ def save_results(server_context, schema_name, query_name):
         print(query_name, result['rowCount'])
     except Exception as e:
         print(query_name, e)
-=======
-    except Exception as e:
-        print(e)
         return
     if result['rowCount'] == 0:
         print('{}.{} has no data'.format(schema_name, query_name))
         return
->>>>>>> 7ccf4f86a99b546f988c487eca8fdeddc4db259a
 
 
 
