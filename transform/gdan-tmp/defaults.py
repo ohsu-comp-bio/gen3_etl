@@ -13,9 +13,9 @@ from datetime import date, datetime
 DATE_FORMAT = '%Y/%m/%d %H:%M:%S'
 
 
-DEFAULT_OUTPUT_DIR = 'output/bcc'
-DEFAULT_EXPERIMENT_CODE = 'bcc'
-DEFAULT_PROJECT_ID = 'ohsu-bcc'
+DEFAULT_OUTPUT_DIR = 'output/gdan-tmp'
+DEFAULT_EXPERIMENT_CODE = 'ohsu-CCG_TMP_AWG'
+DEFAULT_PROJECT_ID = 'ohsu-CCG_TMP_AWG'
 
 def emitter(type=None, output_dir=DEFAULT_OUTPUT_DIR, **kwargs):
     """Creates a default emitter for type."""
@@ -25,7 +25,7 @@ def emitter(type=None, output_dir=DEFAULT_OUTPUT_DIR, **kwargs):
 def default_parser(output_dir, experiment_code, project_id):
     parser = default_argument_parser(
         output_dir=output_dir,
-        description='Reads bcc json and writes gen3 json ({}).'.format(output_dir)
+        description='Reads gdan-tmp json and writes gen3 json ({}).'.format(output_dir)
     )
     parser.add_argument('--experiment_code', type=str,
                         default=experiment_code,
@@ -67,9 +67,9 @@ def _DOBs(output_dir):
         return DOBs
     # load date of birth cache
     DOBs = {}
-    bcc_participant_path = '{}/bcc_participant_dob.json'.format(output_dir)
-    if os.path.isfile(bcc_participant_path):
-        for line in reader(bcc_participant_path):
+    gdan_tmp_participant_path = '{}/gdan-tmp_participant_dob.json'.format(output_dir)
+    if os.path.isfile(gdan-tmp_participant_path):
+        for line in reader(gdan-tmp_participant_path):
             DOBs[line['participantid']] = datetime.strptime(line['DateOfBirth'], DATE_FORMAT)
     return DOBs
 

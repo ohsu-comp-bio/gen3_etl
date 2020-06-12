@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_diagnosis, default_case, emitter,  missing_parent, save_missing_parents
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_diagnosis, default_case, emitter,  missing_parent, save_missing_parents, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 # """
@@ -57,12 +57,14 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
                 missing_cases.add(case_submitter_id)
 
     for k in diagnosises:
+        diagnosises[k] = obscure_dates(diagnosises[k], output_dir=output_dir, participantid=diagnosises[k]['cases']['submitter_id'])
         diagnoses_emitter.write(diagnosises[k])
 
     cases = missing_cases - cases
     print('missing diagnosis for {} cases'.format(len(cases)))
     for participantid in cases:
         diagnosis = default_diagnosis(participantid, project_id=DEFAULT_PROJECT_ID)
+        diagnosis = obscure_dates(diagnosis, output_dir=output_dir)
         diagnoses_emitter.write(diagnosis)
     diagnoses_emitter.close()
 
@@ -70,11 +72,13 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
     cases_emitter = emitter('case', output_dir=output_dir, append=True)
     for participantid in missing_cases:
         case = default_case(DEFAULT_EXPERIMENT_CODE, participantid, DEFAULT_PROJECT_ID)
+        case = obscure_dates(case, output_dir=output_dir)
         cases_emitter.write(case)
     cases_emitter.close()
 
     bcc_diagnosises_emitter = emitter('bcc_diagnosis', output_dir=output_dir)
     for k in bcc_diagnosises:
+        bcc_diagnosises[k] = obscure_dates(bcc_diagnosises[k], output_dir=output_dir)
         bcc_diagnosises_emitter.write(bcc_diagnosises[k])
     bcc_diagnosises_emitter.close()
 

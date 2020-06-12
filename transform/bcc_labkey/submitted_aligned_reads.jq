@@ -1,0 +1,1 @@
+{ "read_groups": { "submitter_id": .submitter_id }, "data_type": "Aligned Reads", "experimental_strategy": "WGS", "data_format": "BAM", "type": "submitted_aligned_reads", "submitter_id": (.submitter_id + "-submitted_aligned_reads"), "data_category": "Raw Sequencing Data", "md5sum": "595f44fec1e92a71d3e9e77456ba80d1", "file_size": 12345, "file_name": (.submitter_id + ".BAM"), }

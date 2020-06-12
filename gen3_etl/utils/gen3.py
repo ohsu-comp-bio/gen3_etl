@@ -7,11 +7,18 @@ import json
 from gen3.auth import Gen3Auth
 from gen3.submission import Gen3Submission
 from gen3_etl.utils.collections import grouper
+import logging
+import hashlib
+import multiprocessing as mp
+
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 os.environ['CURL_CA_BUNDLE'] = ''
+
+logger = logging.getLogger('utils.gen3')
+
 
 DEFAULT_CREDENTIALS_PATH = os.path.join('config', 'credentials.json')
 DEFAULT_HOST = 'localhost'
@@ -35,18 +42,24 @@ def create_node(submission_client, program_name, project_code, node):
         nodes = node
         if not isinstance(node, (list,)):
             nodes = [node]
-        response_text = submission_client.submit_record(program_name, project_code, nodes)
+        response_text = None    
         response = None
-        response = json.loads(response_text)
+        response = submission_client.submit_record(program_name, project_code, nodes)
+        # response = json.loads(response_text)
+        # logger.info(f"create_node: status_code:{response['code']}")
         assert response['code'] == 200, 'could not create {} {}'.format(nodes[0]['type'], response_text)
-        print('created {} {}(s)'.format(len(response['entities']), response['entities'][0]['type']), file=sys.stderr)
+        logger.info('created {} {}(s)'.format(len(response['entities']), response['entities'][0]['type']))
         return response
     except Exception as e:
-        for entity in response['entities']:
-            for error in entity.get('errors', []):
-                print('ERROR {} {} {}'.format(error['type'], entity['type'], entity), file=sys.stderr)
-        for error in response['transactional_errors']:
-            print('ERROR transactional_error {}'.format(error), file=sys.stderr)
+        logger.error(f"create_node: error {e}")
+        logger.error(f"create_node: error {response_text} {nodes}")
+        if response:
+            for entity in response.get('entities', []):
+                for error in entity.get('errors', []):
+                    logger.error('{} {} {}'.format(error['type'], entity['type'], entity))
+            for error in response.get('transactional_errors', []):
+                logger.error(' transactional_error {}'.format(error))
+                logger.error(json.dumps(response))
         raise e
                 # if error['type'] == 'INVALID_LINK':
                 #     print('WARNING INVALID_LINK {} {}'.format(entity['type'],entity), file=sys.stderr)
@@ -55,18 +68,26 @@ def create_node(submission_client, program_name, project_code, node):
                 #     raise e
 
 def delete_type(submission_client, program, project, batch_size, t):
-    response = submission_client.export_node_all_type(program, project, t)
-    if 'data' not in response:
-        print('no data?', response, file=sys.stderr)
+    response = submission_client.export_node(program, project, node_type=t, fileformat='json')
+    # # pool = mp.Pool(mp.cpu_count())
+
+    def collect_result(delete_response):
+        delete_response = delete_response.json()
+        assert delete_response['code'] == 200, delete_response
+        logger.info('deleted {} {}'.format(t, delete_response['message']))
+
+    if 'data' not in response or len(response['data']) == 0:
+        logger.warning(f'No {t} to delete {response}')
     else:
         for ids in grouper(batch_size, [n['node_id'] for n in response['data']]):
-            len_ids = len(ids)
+            logger.info(f'deleting {len(ids)}')
             ids = ','.join(ids)
-            delete_response = submission_client.delete_node(program, project, ids)
-            delete_response = json.loads(delete_response)
-            assert delete_response['code'] == 200, delete_response
-            print('deleted {} {}'.format(len_ids, t), file=sys.stderr)
-
+            collect_result(submission_client.delete_record(program, project, ids))
+            # # pool.apply_async(submission_client.delete_record, args=(program, project, ids), callback=collect_result)
+        # Close Pool and let all the processes complete
+        # postpones the execution of next line of code until all processes in the queue are done
+        # # pool.close()
+        # # pool.join()
 
 def delete_all(submission_client, program, project, batch_size=200, types=['submitted_methylation', 'aliquot', 'sample', 'demographic', 'case', 'experiment']):
     """Delete all nodes in types hierarchy."""
@@ -119,7 +140,7 @@ def generate_edge_tablename(src_label, label, dst_label):
         oldname = tablename
         logger.debug('Edge tablename {} too long, shortening'.format(oldname))
         tablename = 'edge_{}_{}'.format(
-            str(hashlib.md5(tablename).hexdigest())[:8],
+            str(hashlib.md5(tablename.encode('utf-8')).hexdigest())[:8],
             "{}{}{}".format(
                 ''.join([a[:2] for a in src_label.split('_')])[:10],
                 ''.join([a[:2] for a in label.split('_')])[:7],

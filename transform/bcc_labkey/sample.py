@@ -6,8 +6,29 @@ import json
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_sample, default_case, emitter, missing_parent, save_missing_parents
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, default_sample, default_case, emitter, missing_parent, save_missing_parents, obscure_dates
 from gen3_etl.utils.schema import generate, template
+
+
+LOOKUP_PATHS = """
+source/bcc/sample_type.json
+""".strip().split()
+
+
+def lookups():
+    look_ups = {}
+    for p in LOOKUP_PATHS:
+        c = p.replace('source/bcc/','').replace('genetrails_','').replace('.json','')
+        look_ups[c] = {}
+        print(p, c)
+        for line in reader(p):
+            name = line['display_name']
+            val = [line[k] for k in line if not k.startswith('_') and k.endswith('_id')][0]
+            look_ups[c][val] = name
+    return look_ups
+
+
+LOOKUPS = lookups()
 
 
 def transform(item_paths, output_dir, experiment_code, compresslevel=0):
@@ -48,8 +69,16 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
             samples_emitter.write(sample)
             samples.append(submitter_id)
 
+
             bcc_sample = {'type': 'bcc_sample', 'sample': {'submitter_id': submitter_id}, 'source': source, 'submitter_id': bcc_submitter_id, 'project_id': DEFAULT_PROJECT_ID}
             bcc_sample.update(line)
+            if '_labkeyurl_sample_type_id' in bcc_sample:
+                bcc_sample['sample_type'] = LOOKUPS['sample_type'][bcc_sample['sample_type_id']]
+                del bcc_sample['sample_type_id']
+                del bcc_sample['_labkeyurl_sample_type_id']
+
+            bcc_sample = obscure_dates(bcc_sample, output_dir=output_dir)
+
             bcc_samples_emitter.write(bcc_sample)
 
             if case_submitter_id not in cases:
@@ -85,7 +114,7 @@ def transform(item_paths, output_dir, experiment_code, compresslevel=0):
 
 
 if __name__ == "__main__":
-    item_paths = ['source/bcc/vbiolibraryspecimens.json', 'source/bcc/Samples.json', 'source/bcc/sample_genetrails_assay.json']
+    item_paths = ['source/bcc/vbiolibraryspecimens.json', 'source/bcc/Samples.json', 'source/bcc/sample_genetrails_assay.json', 'source/bcc/sample.json']
     args = default_parser(DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID).parse_args()
     transform(item_paths, output_dir=args.output_dir, experiment_code=args.experiment_code)
 

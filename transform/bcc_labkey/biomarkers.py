@@ -5,7 +5,7 @@ import json
 
 from gen3_etl.utils.ioutils import reader
 
-from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, default_treatment, missing_parent, save_missing_parents
+from defaults import DEFAULT_OUTPUT_DIR, DEFAULT_EXPERIMENT_CODE, DEFAULT_PROJECT_ID, default_parser, emitter, default_treatment, missing_parent, save_missing_parents, obscure_dates
 from gen3_etl.utils.schema import generate, template
 
 def transform_gen3(item_paths, output_dir, project_id, compresslevel=0):
@@ -34,7 +34,7 @@ def transform_gen3(item_paths, output_dir, project_id, compresslevel=0):
             return biomarker
         biomarkers_with_case = [add_case(b) for b in biomarkers if b['MRN'] in case_lookup]
         print('there are',len(biomarkers_with_case), 'biomarkers with cases, out of ', len(biomarkers), 'biomarkers')
-        [biomarker_emitter.write(b) for b in biomarkers_with_case]
+        [biomarker_emitter.write(obscure_dates(b)) for b in biomarkers_with_case]
     biomarker_emitter.close()
 
 

@@ -1,5 +1,5 @@
 import os
-from yaml import dump, load
+from yaml import dump, load, FullLoader
 from genson import SchemaBuilder
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.defaults import camel_case
@@ -33,10 +33,10 @@ def template(type_name):
     """Parses template for type_name."""
     try:
         with open(os.path.join('schemas', '{}.yaml'.format(type_name))) as ins:
-            return load(ins)
+            return load(ins, Loader=FullLoader)
     except Exception as e:
         with open(os.path.join('schemas', '{}.yaml'.format('default'))) as ins:
-            return load(ins)
+            return load(ins, Loader=FullLoader)
 
 def generate(item_paths, type_name=None, output_dir=None, schema_path=None, callback=None, links=[]):
     """

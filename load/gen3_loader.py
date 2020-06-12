@@ -3,6 +3,8 @@ import os
 from glob import glob
 import json
 import sys
+import multiprocessing as mp
+import logging
 
 from gen3_etl.utils.ioutils import reader
 from gen3_etl.utils.cli import default_argument_parser
@@ -19,23 +21,50 @@ DEFAULT_DELETE_FIRST = False
 DEFAULT_CREDENTIALS_PATH = os.path.join('config', 'credentials.json')
 DEFAULT_ENDPOINT = 'https://localhost'
 
+logger = logging.getLogger('gen3_loader')
+
 
 def upload(path, program, project, submission_client, batch_size, delete_first):
     """Read gen3 json and write to gen3."""
+    pool = mp.Pool(mp.cpu_count())
+
+    def collect_result(response):
+        is_error = False
+        for entity in response['entities']:
+            for error in entity.get('errors', []):
+                logger.error('{} {} {}'.format(error['type'], entity['type'], entity))
+                is_error = True
+        for error in response['transactional_errors']:
+            logger.error('transactional_error {}'.format(error))
+            logger.error(json.dumps(response))
+            is_error = True
+        if is_error:
+            logger.debug(response)
+
     for p in glob(path):
         deleted = False
+        print(p)
         for lines in grouper(batch_size, reader(p)):
             nodes = [l for l in lines]
 
             if nodes[0]['type'] == 'project':
                 for node in nodes:
-                    r = submission_client.create_project(program, node)
-                    response = None
-                    try:
-                        response = json.loads(r)
-                    except Exception as e:
-                        pass
+                    print('creating program')
+                    response = submission_client.create_program({'name': program, 'dbgap_accession_number': program, 'type': 'program'})
+                    # response = None
+                    # try:
+                    #     response = json.loads(r)
+                    # except Exception as e:
+                    #     pass
                     assert response, 'could not parse response {}'.format(r)
+                    # assert 'code' in response, f'Unexpected response {response}'
+                    # assert response['code'] == 200, 'could not create {} program'.format(response)
+                    assert 'id' in response, 'could not create {} program'.format(response)
+                    assert program in response['name'], 'could not create {} program'.format(response)
+
+                    response = submission_client.create_project(program, node)
+                    assert response, 'could not parse response'
+                    assert 'code' in response, f'Unexpected response {response}'
                     assert response['code'] == 200, 'could not create {} {}'.format(nodes[0]['type'], response)
                     assert 'successful' in response['message'], 'could not create {} {}'.format(nodes[0]['type'], response)
                     print('Created project {}'.format(node['code']), file=sys.stderr)
@@ -47,7 +76,14 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
             if not deleted and delete_first:
                 delete_all(submission_client, program, project, types=[nodes[0]['type']])
                 deleted = True
-            create_node(submission_client, program, project, nodes)
+
+            collect_result(create_node(submission_client, program, project, nodes))
+            # pool.apply_async(create_node, args=(submission_client, program, project, nodes), callback=collect_result)
+
+    # logger.info(f'pool.close/join')
+    # pool.close()
+    # pool.join()  # postpones the execution of next line of code until all processes in the queue are done
+
 
 
 if __name__ == "__main__":
@@ -83,7 +119,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    logging.basicConfig(level=logging.INFO, format=log_fmt)
+
     sc = submission_client(refresh_file=args.credentials_path, endpoint=args.endpoint)
+
 
     upload(path=args.path,
            program=args.program,
