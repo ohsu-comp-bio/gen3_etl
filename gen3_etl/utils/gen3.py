@@ -1,31 +1,19 @@
 """Utility, helps with gen3."""
 import os
-import urllib3
-import requests
-import sys
 import json
+
 from gen3.auth import Gen3Auth
 from gen3.submission import Gen3Submission
 from gen3_etl.utils.collections import grouper
+
 import logging
 import hashlib
 import multiprocessing as mp
 
-
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-os.environ['CURL_CA_BUNDLE'] = ''
-
 logger = logging.getLogger('utils.gen3')
 
 
-DEFAULT_CREDENTIALS_PATH = os.path.join('config', 'credentials.json')
-DEFAULT_HOST = 'localhost'
-DEFAULT_ENDPOINT = 'https://{}'.format(DEFAULT_HOST)
-
-
-def submission_client(endpoint=DEFAULT_ENDPOINT, refresh_file=DEFAULT_CREDENTIALS_PATH):
+def submission_client(endpoint, refresh_file):
     """Create authorized client."""
     auth = Gen3Auth(endpoint, refresh_file=refresh_file)
     assert auth, 'should return an auth client'
@@ -52,7 +40,7 @@ def create_node(submission_client, program_name, project_code, node):
         return response
     except Exception as e:
         logger.error(f"create_node: error {e}")
-        logger.error(f"create_node: error {response_text} {nodes}")
+        logger.error(f"create_node: error {response} {nodes}")
         if response:
             for entity in response.get('entities', []):
                 for error in entity.get('errors', []):
@@ -68,8 +56,18 @@ def create_node(submission_client, program_name, project_code, node):
                 #     raise e
 
 def delete_type(submission_client, program, project, batch_size, t):
+    """Delete all members of that type."""
     response = submission_client.export_node(program, project, node_type=t, fileformat='json')
-    # # pool = mp.Pool(mp.cpu_count())
+    assert 'data' in response, f"no data? {t} {response}"
+
+    if len(response['data']) == 0:
+        print(f"No {t} to delete.")
+        return 
+    assert len(response['data']) > 0, f"{t} zero length data {response}"
+    assert 'id' in response['data'][0], f"{t} no id" 
+
+
+    pool = mp.Pool(mp.cpu_count())
 
     def collect_result(delete_response):
         delete_response = delete_response.json()
@@ -79,15 +77,15 @@ def delete_type(submission_client, program, project, batch_size, t):
     if 'data' not in response or len(response['data']) == 0:
         logger.warning(f'No {t} to delete {response}')
     else:
-        for ids in grouper(batch_size, [n['node_id'] for n in response['data']]):
-            logger.info(f'deleting {len(ids)}')
+        for ids in grouper(batch_size, [n['id'] for n in response['data']]):
+            print(f'deleting {len(ids)}')
             ids = ','.join(ids)
             collect_result(submission_client.delete_record(program, project, ids))
             # # pool.apply_async(submission_client.delete_record, args=(program, project, ids), callback=collect_result)
         # Close Pool and let all the processes complete
         # postpones the execution of next line of code until all processes in the queue are done
-        # # pool.close()
-        # # pool.join()
+        pool.close()
+        pool.join()
 
 def delete_all(submission_client, program, project, batch_size=200, types=['submitted_methylation', 'aliquot', 'sample', 'demographic', 'case', 'experiment']):
     """Delete all nodes in types hierarchy."""
@@ -97,6 +95,7 @@ def delete_all(submission_client, program, project, batch_size=200, types=['subm
             delete_type(submission_client, program, project, batch_size, t)
         except Exception as e:
             print(e)
+            raise e
 
 
 def create_experiment(submission_client, program, project, submitter_id):
@@ -111,12 +110,14 @@ def create_experiment(submission_client, program, project, submitter_id):
 
 # https://github.com/uc-cdis/gdcdatamodel/blob/develop/gdcdatamodel/models/__init__.py#L163
 def get_class_tablename_from_id(_id):
+    """Generate table name."""
     return 'node_{}'.format(_id.replace('_', ''))
 
 
 # https://github.com/uc-cdis/gdcdatamodel/blob/develop/gdcdatamodel/models/__init__.py#L370
 def generate_edge_tablename(src_label, label, dst_label):
     """Generate a name for the edge table.
+
     Because of the limit on table name length on PostgreSQL, we have
     to truncate some of the longer names.  To do this we concatenate
     the first 2 characters of each word in each of the input arguments
@@ -127,7 +128,6 @@ def generate_edge_tablename(src_label, label, dst_label):
     gets us a name like ``edge_721d393f_LaLeSeqDaFrLaLeSeBu``.  This
     is rather an undesirable workaround. - jsm
     """
-
     tablename = 'edge_{}{}{}'.format(
         src_label.replace('_', ''),
         label.replace('_', ''),

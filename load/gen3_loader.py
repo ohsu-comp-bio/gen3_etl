@@ -41,16 +41,17 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
         if is_error:
             logger.debug(response)
 
+    file_count = 0
     for p in glob(path):
+        file_count += 1
         deleted = False
         print(p)
         for lines in grouper(batch_size, reader(p)):
             nodes = [l for l in lines]
-
             if nodes[0]['type'] == 'project':
                 for node in nodes:
                     print('creating program')
-                    response = submission_client.create_program({'name': program, 'dbgap_accession_number': program, 'type': 'program'})
+                    response = submission_client.create_program({'name': program, 'dbgap_accession_number': program,  'submitter_id': program, 'type': 'program'})
                     # response = None
                     # try:
                     #     response = json.loads(r)
@@ -71,7 +72,7 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
                 continue
 
             if nodes[0]['type'] == 'experiment':
-                project = nodes[0]['projects'][0]['code']
+                project = nodes[0]['projects']['code']
 
             if not deleted and delete_first:
                 delete_all(submission_client, program, project, types=[nodes[0]['type']])
@@ -83,7 +84,8 @@ def upload(path, program, project, submission_client, batch_size, delete_first):
     # logger.info(f'pool.close/join')
     # pool.close()
     # pool.join()  # postpones the execution of next line of code until all processes in the queue are done
-
+    if file_count == 0:
+        logger.error(f'no files found in {path}')
 
 
 if __name__ == "__main__":

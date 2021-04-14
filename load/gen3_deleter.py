@@ -10,7 +10,7 @@ DEFAULT_PROGRAM = None
 DEFAULT_PROJECT = None
 DEFAULT_CREDENTIALS_PATH = os.path.join('config', 'credentials.json')
 DEFAULT_ENDPOINT = 'https://localhost'
-DEFAULT_TYPES = ['submitted_methylation', 'submitted_somatic_mutation', 'read_group', 'demographic', 'aliquot', 'sample', 'bcc_diagnosis', 'diagnosis', 'bcc_demographic', 'demographic', 'bcc_participant', 'case', 'experiment']
+DEFAULT_TYPES = ['file', 'sequencing', 'aliquot', 'sample', 'subject' ] # ['submitted_methylation', 'submitted_somatic_mutation', 'read_group', 'demographic', 'aliquot', 'sample', 'bcc_diagnosis', 'diagnosis', 'bcc_demographic', 'demographic', 'bcc_participant', 'case', 'experiment']
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_DROP_PROJECT = False
 logger = logging.getLogger('gen3_deleter')
@@ -21,12 +21,12 @@ def delete(program, project, submission_client, types=DEFAULT_TYPES, batch_size=
     try:
         if drop_project:
             print(submission_client.delete_project(program, project), file=sys.stderr)
+            try:
+                print(submission_client.delete_program(program), file=sys.stderr)
+            except Exception as e:
+                print(e)
     except Exception as e:
         print(e)
-    # try:
-    #     print(submission_client.delete_program(program), file=sys.stderr)
-    # except Exception as e:
-    #     print(e)
 
 
 if __name__ == "__main__":

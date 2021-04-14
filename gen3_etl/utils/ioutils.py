@@ -12,16 +12,21 @@ import json
 
 
 class JsonReader:
+    """Return parsed json for each line."""
+
     def __init__(self, path):
+        """Return parsed json for each line."""
         if path.endswith(".json.gz"):
             self.fp = io.TextIOWrapper(io.BufferedReader(gzip.GzipFile(path)))
         else:
             self.fp = open(path, "r", encoding='utf-8')
 
     def __iter__ (self):
+        """Return reference."""
         return self
 
     def __next__(self):
+        """Read next line."""
         try:
             l = self.fp.readline()
             if len(l) < 1:
@@ -55,6 +60,8 @@ def reader(path, **kwargs):
     elif path.endswith(".tsv"):
         return csv.DictReader(open(path, "r", encoding='utf-8'), delimiter="\t", **kwargs)
     elif path.endswith(".json"):
+        return JsonReader(path)
+    elif path.endswith(".ndjson"):
         return JsonReader(path)
     else:
         return open(path, "r", encoding='utf-8')
