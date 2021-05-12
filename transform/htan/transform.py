@@ -9,6 +9,7 @@ from collections import defaultdict
 # inflection = inflect.engine()
 from parse import get_atlas_files
 from pathlib import Path
+import pandas 
 
 entities = defaultdict(set)
 
@@ -42,9 +43,9 @@ def subject(line, project_id):
 def sample(line, subject_id, biopsy_id, institution):
     """Render gen3 vertex."""
     bems_id = None
-    sample_id = line['Sample']
-    if line['Alias'] != 'NA':
-        bems_id = to_bems(line['Alias'])
+    sample_id = line['HTAN ID']
+    if line['BEMS ID'] != 'NA':
+        bems_id = to_bems(line['BEMS ID'])
     _s = {'type': "sample", 'submitter_id': sample_id, "subjects": { "submitter_id": subject_id }}    
     if bems_id:
         _s["specimen_id"] = bems_id   
@@ -156,8 +157,137 @@ def to_bems(alias):
     """Xform alias to bems."""
     return f"BEMS{alias.lstrip('0')}"
 
+###
+# Tracking manfiest functionality
+###
+def load_manifest(path='./source/htan/200618_HTAN ID_tracking manifest.xlsx'):
+    '''
+    Reads the excel file containing the tracking manifest, ignores the template 
+    sheet, and concatenates the results before returning the manifest as a 
+    Pandas dataframe
+    '''
+    # Read the dictionary {sheet_name: sheet_df} from the external file
+    sheets = pandas.read_excel(path, sheet_name=None)
+    # Exclude the template sheet, could cause need to DEBUG
+    case_sheet_names = []
+    for n in sheets.keys():
+        if not 'keep' in n and not 'Template' in n:
+            case_sheet_names.append(n)
+    case_sheets = {n:sheets[n] for n in case_sheet_names}
+    # Concatenate the dataframes in the array, reindex, and return
+    manifest = pandas.concat(case_sheets, sort=True).reset_index()
+    return manifest
 
-keys = "Project	Experiment	Case	Sample	Slide	Aliquot	Alias	Description	Assay	Institution".split()
+def fix_columns(raw_manifest):
+    '''
+    Determine the appropriate institution label and appropriate assay label
+    '''
+    # Names of consortium organizations
+    institutions = ['OHSU', 'HMS', 'MDACC']
+    # Dictionary which associates researchers with their institutions
+    researcherConversion = {
+        'KDL': 'OHSU',
+        'BETTS': 'OHSU',
+        'CHIN': 'OHSU',
+        'ADEY': 'OHSU',
+        'NAVIN': 'MDACC',
+        'SORGER': 'HMS',
+        'RIESTERER': 'OHSU', 
+        'COUSSENS': 'OHSU',
+        'SPELLMAN': 'OHSU',
+        'GRAY': 'OHSU'
+    } 
+    # Iterate over the rows of the dataframe determine the correct column values
+    fixed_manifest = raw_manifest.astype(str)
+    #fixed_manifest['BEMS ID'] = fixed_manifest['BEMS ID'].astype(float)
+    #fixed_manifest['Parent BEMS ID'] = fixed_manifest['Parent BEMS ID'].astype(float)
+    # Fix the values in each column
+    for i, row in fixed_manifest.iterrows():
+        # Fix Assay
+        #fixed_manifest.at[i,'Assay'] = fixAssay(row['Assay'])
+        fixed_manifest.at[i,'Assay'] = row['Assay']
+        # Fix Institution
+        # Check to see if there are reseacher names in the institution column
+        for lab in researcherConversion:
+            if lab in row['Institution'].upper():
+                fixed_manifest.at[i,'Institution'] = researcherConversion[lab]
+                fixed_manifest.at[i,'Lab'] = lab
+                break
+        # Otherwise, check for institutions names
+        else:
+            for inst in institutions:
+                if inst in row['Institution'].upper():
+                    fixed_manifest.at[i,'Institution'] = inst
+                    fixed_manifest.at[i,'Lab'] = 'missing'
+                    break
+            # Otherwise, guess
+            else:
+                fixed_manifest.at[i,'Instituion'] = 'missing'
+                fixed_manifest.at[i,'Lab'] = 'missing'
+        # Fix BEMS ID
+        bid = fixed_manifest['BEMS ID'].astype(float)[i]
+        pbid = fixed_manifest['Parent BEMS ID'].astype(float)[i]
+        #if pandas.isna(row['BEMS ID']) and not pandas.isna(row['Parent BEMS ID']):
+        if pandas.isna(bid) and not pandas.isna(pbid):
+            bid = pbid
+        fixed_manifest.at[i,'BEMS ID'] = bid
+
+    # Make the patients column
+    patients = []
+    for i, row in fixed_manifest.iterrows():
+        if 'HTA' in row['HTAN ID']:
+            patients.append('_'.join(row['HTAN ID'].split('_')[0:2]))
+        elif 'HTA' in row['Parent HTAN ID']:
+            patients.append('_'.join(row['Parent HTAN ID'].split('_')[0:2]))
+        else:
+            patients.append('Unidentified')
+    fixed_manifest['Case'] = patients 
+
+    # Make Experiment column
+    fixed_manifest['Experiment'] = 'OMSAtlas'
+
+    return fixed_manifest
+
+
+def filter_rows(fixed_manifest):
+    '''
+    Drop the columns with NA in Institution, Assay, or HTAN ID
+    *** HTAN ID might be missing for some of the rows that overlap sample ID***
+    '''
+    # Drop rows
+    filtered_manifest = fixed_manifest.dropna(how='any', 
+                              subset=['Institution','Assay','HTAN ID', 'BEMS ID', 'Parent BEMS ID'])
+    # Remove NaNs from Assay
+    filtered_manifest = filtered_manifest[filtered_manifest['Assay'] != 'nan']
+    # ! Fix BEMS ID, this should be done in fix cols
+    filtered_manifest['BEMS ID'] = filtered_manifest['BEMS ID'].astype(int).astype(str)
+    filtered_manifest['BEMS ID'] = filtered_manifest['BEMS ID'].apply(lambda x: '0000'+x)
+    return filtered_manifest[['Note' not in assay for assay in filtered_manifest.Assay]]
+
+
+def process_manifest(manifest):
+    '''
+    Gets the raw manifest ready for use by filtering rows and fixing columns
+    '''
+    # Call function to ensure column assumptions hold
+    fixed_columns = fix_columns(manifest)
+    # Call function to appropriately subset rows. Also subset to useful columns
+    columns = ['HTAN ID', 'Institution', 'Lab', 'Assay', 'BEMS ID', 'Case', 'Description', 'Experiment']
+    processed_manifest = filter_rows(fixed_columns)[columns]
+    return processed_manifest
+
+
+manifest = process_manifest(load_manifest())
+#print(manifest)
+ 
+
+
+
+###
+# Down to business
+###
+
+# not real anymore #keys = "Project	Experiment	Case	Sample	Slide	Aliquot	Alias	Description	Assay	Institution".split()
 biopsy_pattern = re.compile(r'(?P<label>\S+)\s#(?P<id>\S+)\s(?P<description>.*)')
 
 
@@ -171,7 +301,8 @@ for file in get_atlas_files():
     files[sample_id].append(file)    
 
 
-for line in reader('source/htan/HTAN_Metadata.tsv'):    
+#for line in reader('source/htan/HTAN_Metadata.tsv'):
+for i, line in manifest.iterrows():
     project_id = write_node(project(line))    
     experiment_id = write_node(experiment(line, project_id))
     subject_id = write_node(subject(line, project_id))
