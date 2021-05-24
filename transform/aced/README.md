@@ -1,5 +1,6 @@
 ## gen3
 
+```
 export TEST_DATA_PATH="output/aced"
 mkdir -p "$TEST_DATA_PATH"
 
@@ -49,3 +50,4 @@ dc stop spark-service tube-service ; dc rm -f spark-service tube-service
 
 
 dc up -d spark-service tube-service ; bash ./guppy_setup.sh ; dc stop spark-service tube-service ; dc rm -f spark-service tube-service
+```
