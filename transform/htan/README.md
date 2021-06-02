@@ -21,7 +21,41 @@ total 67976
 -rw-r--r--  1 walsbr  OHSUM01\Domain Users      4197 Apr 29 15:11 subject.ndjson
 ```
 
-## Load these files into Gen3
+## QA your transformed data
+
+> The easiest way to do this is use linux commands `[wc, grep, vi, etc.]`
+
+## Delete existing data from Gen3
+
+
+> Quick delete, log into the postgres image and delete from database
+
+
+```
+
+#
+# delete rows from ohsu-htan project
+# logon to gen3 server
+#
+ssh ubuntu@htan-test
+cd test/compose-services
+
+dc exec -u postgres postgres psql
+\c metadata_db ;
+
+>>> You are now connected to database "metadata_db" as user "postgres".
+
+delete from node_sequencing where _props->>'project_id' = 'ohsu-htan'  ;
+delete from node_file where _props->>'project_id' = 'ohsu-htan'  ;
+delete from node_aliquot where _props->>'project_id' = 'ohsu-htan'  ;
+delete from node_sample where _props->>'project_id' = 'ohsu-htan'  ;
+delete from node_subject where _props->>'project_id' = 'ohsu-htan'  ;
+
+```
+
+
+
+## Load transformed files into Gen3
 
 ```
 # endpoint - where gen3 is hosted
@@ -41,9 +75,30 @@ $LOAD/sample.ndjson
 $LOAD/aliquot.ndjson
 $LOAD/file.ndjson
 
+# expected output
+
+(venv) $ $LOAD/project.ndjson
+output/htan/project.ndjson
+creating program
+Created project htan
+(venv) $ $LOAD/subject.ndjson
+output/htan/subject.ndjson
+2021-06-01 20:07:17,037 - utils.gen3 - INFO - created 54 subject(s)
+(venv) $ $LOAD/sample.ndjson
+output/htan/sample.ndjson
+2021-06-01 20:07:28,128 - utils.gen3 - INFO - created 100 sample(s)
+2021-06-01 20:07:30,127 - utils.gen3 - INFO - created 75 sample(s)
+(venv) $ $LOAD/aliquot.ndjson
+output/htan/aliquot.ndjson
+2021-06-01 20:07:58,619 - utils.gen3 - INFO - created 100 aliquot(s)
+2021-06-01 20:08:01,161 - utils.gen3 - INFO - created 100 aliquot(s)
+2021-06-01 20:08:02,634 - utils.gen3 - INFO - created 55 aliquot(s)
+
+etc.
+
 ```
 
-# gen3 server instance
+## gen3 server instance
 
 ```
 # remember to add `10.96.11.189 htan-test` to your /etc/hosts
@@ -57,7 +112,7 @@ dc ps
       Name                     Command                   State                            Ports
 --------------------------------------------------------------------------------------------------------------------
 arborist-service    bash /go/src/github.com/uc ...   Up (healthy)
-esproxy-service     /bin/bash -c echo -e 'clus ...   Up (unhealthy)   0.0.0.0:9200->9200/tcp, 0.0.0.0:9300->9300/tcp
+esproxy-service     /bin/bash -c echo -e 'clus ...   Up (healthy)     0.0.0.0:9200->9200/tcp, 0.0.0.0:9300->9300/tcp
 fence-service       sh /entrypoint.sh bash /va ...   Up (healthy)     443/tcp, 80/tcp
 guppy-service       /usr/bin/wait_for_esproxy. ...   Up               3000/tcp, 80/tcp
 indexd-service      sh /entrypoint.sh bash ind ...   Up (healthy)     443/tcp, 80/tcp
@@ -78,37 +133,16 @@ I've started an overview doc here https://docs.google.com/document/d/16PkPBqE3gz
 
 
 
-# Issues:
+#
+# Queries 
+#
 
-Some paths don't have bem ids.
-e.g
-```
-warn:file_missing_bems /./HTA9_2/HMS-SORGER/t-CycIF_Tumor_Panel/CSB08/registration/CSB08.antibody.metadata.csv
-```
-
-Some bems ids are missing from spreadsheet?
-Are we identifying all biopsies?  Should all files have a biopsy?
-Are we identifying pipeline_stages correctly?
-We have a fake md5sum for now, should we harvest w/ next directory listing?
-Have we identified data_category correctly?
-
-
-# etc
-
-quick delete, log into the postgres image and delete from database
 
 ```
-delete from node_sequencing where _props->>'project_id' = 'ohsu-htan'  ;
-delete from node_file where _props->>'project_id' = 'ohsu-htan'  ;
-delete from node_aliquot where _props->>'project_id' = 'ohsu-htan'  ;
-delete from node_sample where _props->>'project_id' = 'ohsu-htan'  ;
-```
-
-
 
 # Sample queries
 # Give me all level 1 files for case 2 (aka "HTA9_1").
-```
+
 {
 	subject(submitter_id:"HTA9_1") {
     submitter_id
