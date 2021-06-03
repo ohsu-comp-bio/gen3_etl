@@ -98,6 +98,16 @@ etc.
 
 ```
 
+## Recreate elastic search index
+
+```
+ $ dc up -d spark-service tube-service
+ $ bash ./guppy_setup.sh
+ $ dc stop spark-service tube-service ; dc rm -f spark-service tube-service
+
+```
+
+
 ## gen3 server instance
 
 ```
